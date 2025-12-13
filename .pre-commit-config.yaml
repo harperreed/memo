@@ -1,4 +1,4 @@
-# ABOUTME: Pre-commit hooks configuration for pagen project
+# ABOUTME: Pre-commit hooks configuration for memo project
 # ABOUTME: Runs formatting, linting, and tests before each commit
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -11,7 +11,7 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
         args: ['--maxkb=1000']  # Block files > 1MB (except binary)
-        exclude: ^pagen$  # Allow the binary
+        exclude: ^memo$  # Allow the binary
       - id: check-merge-conflict
       - id: mixed-line-ending
         args: ['--fix=lf']

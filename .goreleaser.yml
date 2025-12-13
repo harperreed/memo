@@ -79,7 +79,7 @@ brews:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
     homepage: https://github.com/harperreed/memo
-    description: "A super simple git-aware todo manager"
+    description: "A command-line notes tool with markdown, tags, and MCP support"
     license: MIT
     commit_author:
       name: goreleaserbot
@@ -87,4 +87,4 @@ brews:
     install: |
       bin.install "memo"
     test: |
-      system "#{bin}/memo", "version"
+      system "#{bin}/memo", "--help"
