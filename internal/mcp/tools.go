@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -185,7 +186,7 @@ func (s *Server) registerTools() {
 	}, s.handleExportNote)
 }
 
-// Tool handlers
+// Tool handlers.
 func (s *Server) handleAddNote(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var params struct {
 		Title   string   `json:"title"`
@@ -194,6 +195,16 @@ func (s *Server) handleAddNote(ctx context.Context, req *mcp.CallToolRequest) (*
 	}
 	if err := json.Unmarshal(req.Params.Arguments, &params); err != nil {
 		return nil, err
+	}
+
+	// Validate content is not empty
+	if strings.TrimSpace(params.Content) == "" {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "note content cannot be empty"},
+			},
+			IsError: true,
+		}, nil
 	}
 
 	note := models.NewNote(params.Title, params.Content)
@@ -207,7 +218,10 @@ func (s *Server) handleAddNote(ctx context.Context, req *mcp.CallToolRequest) (*
 	}
 
 	for _, tag := range params.Tags {
-		db.AddTagToNote(s.db, note.ID, tag)
+		if err := db.AddTagToNote(s.db, note.ID, tag); err != nil {
+			// Log but don't fail - note was already created
+			continue
+		}
 	}
 
 	return &mcp.CallToolResult{
@@ -313,6 +327,14 @@ func (s *Server) handleUpdateNote(ctx context.Context, req *mcp.CallToolRequest)
 		note.Title = *params.Title
 	}
 	if params.Content != nil {
+		if strings.TrimSpace(*params.Content) == "" {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					&mcp.TextContent{Text: "note content cannot be empty"},
+				},
+				IsError: true,
+			}, nil
+		}
 		note.Content = *params.Content
 	}
 	note.UpdatedAt = time.Now()

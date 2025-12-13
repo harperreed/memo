@@ -6,6 +6,7 @@ package db
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/harper/memo/internal/models"
@@ -39,8 +40,15 @@ func GetAttachment(db *sql.DB, id uuid.UUID) (*models.Attachment, error) {
 		return nil, err
 	}
 
-	att.ID, _ = uuid.Parse(idStr)
-	att.NoteID, _ = uuid.Parse(noteIDStr)
+	var parseErr error
+	att.ID, parseErr = uuid.Parse(idStr)
+	if parseErr != nil {
+		return nil, fmt.Errorf("invalid attachment ID in database: %w", parseErr)
+	}
+	att.NoteID, parseErr = uuid.Parse(noteIDStr)
+	if parseErr != nil {
+		return nil, fmt.Errorf("invalid note ID in database: %w", parseErr)
+	}
 	return att, nil
 }
 
@@ -73,12 +81,23 @@ func GetAttachmentByPrefix(db *sql.DB, prefix string) (*models.Attachment, error
 		}
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	if count == 0 {
 		return nil, ErrAttachmentNotFound
 	}
 
-	att.ID, _ = uuid.Parse(idStr)
-	att.NoteID, _ = uuid.Parse(noteIDStr)
+	var parseErr error
+	att.ID, parseErr = uuid.Parse(idStr)
+	if parseErr != nil {
+		return nil, fmt.Errorf("invalid attachment ID in database: %w", parseErr)
+	}
+	att.NoteID, parseErr = uuid.Parse(noteIDStr)
+	if parseErr != nil {
+		return nil, fmt.Errorf("invalid note ID in database: %w", parseErr)
+	}
 	return att, nil
 }
 
@@ -109,9 +128,19 @@ func ListNoteAttachments(db *sql.DB, noteID uuid.UUID) ([]*AttachmentMeta, error
 		if err := rows.Scan(&idStr, &noteIDStr, &att.Filename, &att.MimeType, &att.CreatedAt); err != nil {
 			return nil, err
 		}
-		att.ID, _ = uuid.Parse(idStr)
-		att.NoteID, _ = uuid.Parse(noteIDStr)
+		var parseErr error
+		att.ID, parseErr = uuid.Parse(idStr)
+		if parseErr != nil {
+			return nil, fmt.Errorf("invalid attachment ID in database: %w", parseErr)
+		}
+		att.NoteID, parseErr = uuid.Parse(noteIDStr)
+		if parseErr != nil {
+			return nil, fmt.Errorf("invalid note ID in database: %w", parseErr)
+		}
 		attachments = append(attachments, att)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return attachments, nil
 }
@@ -121,8 +150,11 @@ func DeleteAttachment(db *sql.DB, id uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
 		return ErrAttachmentNotFound
 	}
 	return nil

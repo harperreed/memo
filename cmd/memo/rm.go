@@ -31,7 +31,10 @@ var rmCmd = &cobra.Command{
 		if !force {
 			fmt.Printf("Delete note %q (%s)? [y/N] ", note.Title, note.ID.String()[:6])
 			reader := bufio.NewReader(os.Stdin)
-			response, _ := reader.ReadString('\n')
+			response, err := reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("failed to read confirmation: %w", err)
+			}
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response != "y" && response != "yes" {
 				fmt.Println("Cancelled.")

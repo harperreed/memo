@@ -5,6 +5,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/harper/memo/internal/models"
@@ -18,7 +19,7 @@ func GetOrCreateTag(db *sql.DB, name string) (*models.Tag, error) {
 	if err == nil {
 		return tag, nil
 	}
-	if err != sql.ErrNoRows {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 
@@ -27,7 +28,10 @@ func GetOrCreateTag(db *sql.DB, name string) (*models.Tag, error) {
 	if err != nil {
 		return nil, err
 	}
-	id, _ := result.LastInsertId()
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
 	tag.ID = id
 	return tag, nil
 }
@@ -75,6 +79,9 @@ func GetNoteTags(db *sql.DB, noteID uuid.UUID) ([]*models.Tag, error) {
 		}
 		tags = append(tags, tag)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return tags, nil
 }
 
@@ -103,6 +110,9 @@ func ListAllTags(db *sql.DB) ([]*TagWithCount, error) {
 			return nil, err
 		}
 		tags = append(tags, tc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return tags, nil
 }

@@ -5,6 +5,7 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/harper/memo/internal/models"
@@ -37,8 +38,15 @@ func SearchNotes(db *sql.DB, query string, limit int) ([]*SearchResult, error) {
 		if err := rows.Scan(&idStr, &result.Title, &result.Content, &result.CreatedAt, &result.UpdatedAt, &result.Rank); err != nil {
 			return nil, err
 		}
-		result.ID, _ = uuid.Parse(idStr)
+		var parseErr error
+		result.ID, parseErr = uuid.Parse(idStr)
+		if parseErr != nil {
+			return nil, fmt.Errorf("invalid note ID in database: %w", parseErr)
+		}
 		results = append(results, result)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return results, nil
 }

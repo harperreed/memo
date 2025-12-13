@@ -44,7 +44,7 @@ func (s *Server) handleReadResource(ctx context.Context, req *mcp.ReadResourceRe
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to get note: %v", err)
+		return nil, fmt.Errorf("failed to get note: %w", err)
 	}
 
 	// Get tags

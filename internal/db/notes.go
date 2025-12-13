@@ -39,7 +39,11 @@ func GetNoteByID(db *sql.DB, id uuid.UUID) (*models.Note, error) {
 	if err != nil {
 		return nil, err
 	}
-	note.ID, _ = uuid.Parse(idStr)
+	var parseErr error
+	note.ID, parseErr = uuid.Parse(idStr)
+	if parseErr != nil {
+		return nil, fmt.Errorf("invalid note ID in database: %w", parseErr)
+	}
 	return note, nil
 }
 
@@ -64,8 +68,15 @@ func GetNoteByPrefix(db *sql.DB, prefix string) (*models.Note, error) {
 		if err := rows.Scan(&idStr, &note.Title, &note.Content, &note.CreatedAt, &note.UpdatedAt); err != nil {
 			return nil, err
 		}
-		note.ID, _ = uuid.Parse(idStr)
+		var parseErr error
+		note.ID, parseErr = uuid.Parse(idStr)
+		if parseErr != nil {
+			return nil, fmt.Errorf("invalid note ID in database: %w", parseErr)
+		}
 		notes = append(notes, note)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	if len(notes) == 0 {
@@ -111,8 +122,15 @@ func ListNotes(db *sql.DB, tag *string, limit int) ([]*models.Note, error) {
 		if err := rows.Scan(&idStr, &note.Title, &note.Content, &note.CreatedAt, &note.UpdatedAt); err != nil {
 			return nil, err
 		}
-		note.ID, _ = uuid.Parse(idStr)
+		var parseErr error
+		note.ID, parseErr = uuid.Parse(idStr)
+		if parseErr != nil {
+			return nil, fmt.Errorf("invalid note ID in database: %w", parseErr)
+		}
 		notes = append(notes, note)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return notes, nil
 }
@@ -125,8 +143,11 @@ func UpdateNote(db *sql.DB, note *models.Note) error {
 	if err != nil {
 		return err
 	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
 		return ErrNoteNotFound
 	}
 	return nil
@@ -137,8 +158,11 @@ func DeleteNote(db *sql.DB, id uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
 		return ErrNoteNotFound
 	}
 	return nil

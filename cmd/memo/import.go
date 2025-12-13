@@ -147,7 +147,12 @@ func importMarkdownFile(path string) error {
 		title = strings.TrimSuffix(filepath.Base(path), ".md")
 	}
 
-	note := models.NewNote(title, strings.TrimSpace(content))
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return fmt.Errorf("note content cannot be empty")
+	}
+
+	note := models.NewNote(title, content)
 	if err := db.CreateNote(dbConn, note); err != nil {
 		return err
 	}

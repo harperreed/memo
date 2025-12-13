@@ -85,7 +85,10 @@ func openEditor(initial string) (string, error) {
 	defer os.Remove(tmpFile.Name())
 
 	if initial != "" {
-		tmpFile.WriteString(initial)
+		if _, err := tmpFile.WriteString(initial); err != nil {
+			tmpFile.Close()
+			return "", fmt.Errorf("failed to write initial content: %w", err)
+		}
 	}
 	tmpFile.Close()
 
