@@ -51,7 +51,6 @@ var exportCmd = &cobra.Command{
 		notePrefix, _ := cmd.Flags().GetString("note")
 
 		var notes []*db.SearchResult
-		var err error
 
 		if notePrefix != "" {
 			note, err := db.GetNoteByPrefix(dbConn, notePrefix)
