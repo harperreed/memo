@@ -1,0 +1,29 @@
+# Binaries
+memo
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Output of go coverage
+*.out
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Database files (local dev)
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
