@@ -11,6 +11,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const banner = `
+███╗   ███╗███████╗███╗   ███╗ ██████╗
+████╗ ████║██╔════╝████╗ ████║██╔═══██╗
+██╔████╔██║█████╗  ██╔████╔██║██║   ██║
+██║╚██╔╝██║██╔══╝  ██║╚██╔╝██║██║   ██║
+██║ ╚═╝ ██║███████╗██║ ╚═╝ ██║╚██████╔╝
+╚═╝     ╚═╝╚══════╝╚═╝     ╚═╝ ╚═════╝
+
+         📝 Markdown notes with MCP ✨
+`
+
 var (
 	dbPath string
 	dbConn *sql.DB
@@ -19,7 +30,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "memo",
 	Short: "A CLI notes tool with markdown support",
-	Long:  `memo is a command-line notes tool that stores markdown notes with tags and attachments in SQLite.`,
+	Long:  banner + `memo is a command-line notes tool that stores markdown notes with tags and attachments in SQLite.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip DB init for version command
 		if cmd.Name() == "version" {
