@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -166,4 +167,95 @@ func DeleteNote(db *sql.DB, id uuid.UUID) error {
 		return ErrNoteNotFound
 	}
 	return nil
+}
+
+// ListNotesByDirTag returns notes tagged with a specific directory.
+func ListNotesByDirTag(db *sql.DB, dirPath string, limit int) ([]*models.Note, error) {
+	dirTag := strings.ToLower("dir:" + dirPath)
+	rows, err := db.Query(
+		`SELECT DISTINCT n.id, n.title, n.content, n.created_at, n.updated_at
+		 FROM notes n
+		 JOIN note_tags nt ON n.id = nt.note_id
+		 JOIN tags t ON nt.tag_id = t.id
+		 WHERE t.name = ?
+		 ORDER BY n.updated_at DESC
+		 LIMIT ?`,
+		dirTag, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var notes []*models.Note
+	for rows.Next() {
+		note := &models.Note{}
+		var idStr string
+		if err := rows.Scan(&idStr, &note.Title, &note.Content, &note.CreatedAt, &note.UpdatedAt); err != nil {
+			return nil, err
+		}
+		var parseErr error
+		note.ID, parseErr = uuid.Parse(idStr)
+		if parseErr != nil {
+			return nil, fmt.Errorf("invalid note ID in database: %w", parseErr)
+		}
+		notes = append(notes, note)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return notes, nil
+}
+
+// ListGlobalNotes returns notes that don't have any dir: tag.
+func ListGlobalNotes(db *sql.DB, limit int) ([]*models.Note, error) {
+	rows, err := db.Query(
+		`SELECT n.id, n.title, n.content, n.created_at, n.updated_at
+		 FROM notes n
+		 WHERE NOT EXISTS (
+			 SELECT 1 FROM note_tags nt
+			 JOIN tags t ON nt.tag_id = t.id
+			 WHERE nt.note_id = n.id AND t.name LIKE 'dir:%'
+		 )
+		 ORDER BY n.updated_at DESC
+		 LIMIT ?`,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var notes []*models.Note
+	for rows.Next() {
+		note := &models.Note{}
+		var idStr string
+		if err := rows.Scan(&idStr, &note.Title, &note.Content, &note.CreatedAt, &note.UpdatedAt); err != nil {
+			return nil, err
+		}
+		var parseErr error
+		note.ID, parseErr = uuid.Parse(idStr)
+		if parseErr != nil {
+			return nil, fmt.Errorf("invalid note ID in database: %w", parseErr)
+		}
+		notes = append(notes, note)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return notes, nil
+}
+
+// CountGlobalNotes returns the total count of notes without dir: tags.
+func CountGlobalNotes(db *sql.DB) (int, error) {
+	var count int
+	err := db.QueryRow(
+		`SELECT COUNT(*) FROM notes n
+		 WHERE NOT EXISTS (
+			 SELECT 1 FROM note_tags nt
+			 JOIN tags t ON nt.tag_id = t.id
+			 WHERE nt.note_id = n.id AND t.name LIKE 'dir:%'
+		 )`,
+	).Scan(&count)
+	return count, err
 }

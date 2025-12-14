@@ -129,3 +129,15 @@ func Success(msg string) string {
 func Error(msg string) string {
 	return color.New(color.FgRed).Sprint("✗ ") + msg
 }
+
+func FormatDirSectionHeader(dirPath string) string {
+	return fmt.Sprintf("\n%s %s\n", "📁", bold(dirPath))
+}
+
+func FormatGlobalSectionHeader() string {
+	return fmt.Sprintf("\n%s %s\n", "🌐", bold("Global"))
+}
+
+func FormatShowMorePrompt(count int) string {
+	return faint(fmt.Sprintf("\nShow %d more notes? (y/n) ", count))
+}

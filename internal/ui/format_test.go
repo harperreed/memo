@@ -62,3 +62,40 @@ func TestFormatTagList(t *testing.T) {
 		t.Error("expected output to contain count '5'")
 	}
 }
+
+func TestFormatDirSectionHeader(t *testing.T) {
+	dirPath := "/Users/harper/projects/memo"
+	output := FormatDirSectionHeader(dirPath)
+
+	if !strings.Contains(output, dirPath) {
+		t.Errorf("expected output to contain dir path %q", dirPath)
+	}
+	if !strings.Contains(output, "📁") {
+		t.Error("expected output to contain folder emoji")
+	}
+}
+
+func TestFormatGlobalSectionHeader(t *testing.T) {
+	output := FormatGlobalSectionHeader()
+
+	if !strings.Contains(output, "Global") {
+		t.Error("expected output to contain 'Global'")
+	}
+	if !strings.Contains(output, "🌐") {
+		t.Error("expected output to contain globe emoji")
+	}
+}
+
+func TestFormatShowMorePrompt(t *testing.T) {
+	output := FormatShowMorePrompt(15)
+
+	if !strings.Contains(output, "15") {
+		t.Error("expected output to contain count '15'")
+	}
+	if !strings.Contains(output, "more") {
+		t.Error("expected output to contain 'more'")
+	}
+	if !strings.Contains(output, "y/n") {
+		t.Error("expected output to contain 'y/n'")
+	}
+}

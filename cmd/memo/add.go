@@ -26,6 +26,7 @@ var addCmd = &cobra.Command{
 		tagsFlag, _ := cmd.Flags().GetString("tags")
 		contentFlag, _ := cmd.Flags().GetString("content")
 		fileFlag, _ := cmd.Flags().GetString("file")
+		hereFlag, _ := cmd.Flags().GetBool("here")
 
 		var content string
 		var err error
@@ -64,6 +65,18 @@ var addCmd = &cobra.Command{
 						return fmt.Errorf("failed to add tag %q: %w", tag, err)
 					}
 				}
+			}
+		}
+
+		// Add directory tag if --here flag is set
+		if hereFlag {
+			pwd, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to get current directory: %w", err)
+			}
+			dirTag := "dir:" + pwd
+			if err := db.AddTagToNote(dbConn, note.ID, dirTag); err != nil {
+				return fmt.Errorf("failed to add directory tag: %w", err)
 			}
 		}
 
@@ -113,5 +126,6 @@ func init() {
 	addCmd.Flags().String("tags", "", "comma-separated tags")
 	addCmd.Flags().String("content", "", "note content (inline)")
 	addCmd.Flags().String("file", "", "read content from file")
+	addCmd.Flags().Bool("here", false, "tag note with current directory")
 	rootCmd.AddCommand(addCmd)
 }
