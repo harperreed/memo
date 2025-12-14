@@ -15,14 +15,14 @@ func TestSearchNotes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note1 := models.NewNote("Go Programming", "Learn about goroutines and channels")
 	note2 := models.NewNote("Python Basics", "Introduction to Python programming")
 	note3 := models.NewNote("Cooking Recipes", "How to make pasta")
-	CreateNote(db, note1)
-	CreateNote(db, note2)
-	CreateNote(db, note3)
+	_ = CreateNote(db, note1)
+	_ = CreateNote(db, note2)
+	_ = CreateNote(db, note3)
 
 	results, err := SearchNotes(db, "programming", 10)
 	if err != nil {
@@ -39,10 +39,10 @@ func TestSearchNotesNoResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note := models.NewNote("Test", "Content")
-	CreateNote(db, note)
+	_ = CreateNote(db, note)
 
 	results, err := SearchNotes(db, "nonexistent", 10)
 	if err != nil {
@@ -59,13 +59,13 @@ func TestSearchNotesRanking(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Note with term in title should rank higher
 	note1 := models.NewNote("Other Topic", "This mentions golang once")
 	note2 := models.NewNote("Golang Guide", "Golang golang golang everywhere")
-	CreateNote(db, note1)
-	CreateNote(db, note2)
+	_ = CreateNote(db, note1)
+	_ = CreateNote(db, note2)
 
 	results, err := SearchNotes(db, "golang", 10)
 	if err != nil {

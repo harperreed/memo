@@ -13,10 +13,9 @@ import (
 )
 
 var (
-	faint  = color.New(color.Faint).SprintFunc()
-	bold   = color.New(color.Bold).SprintFunc()
-	cyan   = color.New(color.FgCyan).SprintFunc()
-	yellow = color.New(color.FgYellow).SprintFunc()
+	faint = color.New(color.Faint).SprintFunc()
+	bold  = color.New(color.Bold).SprintFunc()
+	cyan  = color.New(color.FgCyan).SprintFunc()
 )
 
 type TagCount struct {
@@ -56,12 +55,14 @@ func FormatNoteContent(content string) (string, error) {
 		glamour.WithWordWrap(80),
 	)
 	if err != nil {
-		return content, nil // Fallback to raw content
+		// Fallback to raw content if renderer fails
+		return content, nil //nolint:nilerr // Intentional fallback
 	}
 
 	out, err := renderer.Render(content)
 	if err != nil {
-		return content, nil
+		// Fallback to raw content if rendering fails
+		return content, nil //nolint:nilerr // Intentional fallback
 	}
 	return out, nil
 }

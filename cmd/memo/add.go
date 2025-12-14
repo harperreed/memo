@@ -35,7 +35,7 @@ var addCmd = &cobra.Command{
 		case contentFlag != "":
 			content = contentFlag
 		case fileFlag != "":
-			data, err := os.ReadFile(fileFlag)
+			data, err := os.ReadFile(fileFlag) //nolint:gosec // User-specified file path is expected CLI behavior
 			if err != nil {
 				return fmt.Errorf("failed to read file: %w", err)
 			}
@@ -95,17 +95,21 @@ func openEditor(initial string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() {
+		_ = os.Remove(tmpFile.Name()) // Best-effort cleanup
+	}()
 
 	if initial != "" {
 		if _, err := tmpFile.WriteString(initial); err != nil {
-			tmpFile.Close()
+			_ = tmpFile.Close()
 			return "", fmt.Errorf("failed to write initial content: %w", err)
 		}
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return "", fmt.Errorf("failed to close temp file: %w", err)
+	}
 
-	cmd := exec.Command(editor, tmpFile.Name())
+	cmd := exec.Command(editor, tmpFile.Name()) //nolint:gosec // Launching $EDITOR is expected CLI behavior
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

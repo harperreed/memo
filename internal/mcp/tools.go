@@ -17,6 +17,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+//nolint:funlen // Tool registration requires many declarations
 func (s *Server) registerTools() {
 	// add_note
 	s.server.AddTool(&mcp.Tool{
@@ -251,7 +252,15 @@ func (s *Server) handleListNotes(ctx context.Context, req *mcp.CallToolRequest) 
 		}, nil
 	}
 
-	data, _ := json.MarshalIndent(notes, "", "  ")
+	data, err := json.MarshalIndent(notes, "", "  ")
+	if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("failed to marshal notes: %v", err)},
+			},
+			IsError: true,
+		}, nil
+	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(data)},
@@ -287,7 +296,15 @@ func (s *Server) handleGetNote(ctx context.Context, req *mcp.CallToolRequest) (*
 		}, nil
 	}
 
-	data, _ := json.MarshalIndent(note, "", "  ")
+	data, err := json.MarshalIndent(note, "", "  ")
+	if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("failed to marshal note: %v", err)},
+			},
+			IsError: true,
+		}, nil
+	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(data)},
@@ -417,7 +434,15 @@ func (s *Server) handleSearchNotes(ctx context.Context, req *mcp.CallToolRequest
 		}, nil
 	}
 
-	data, _ := json.MarshalIndent(notes, "", "  ")
+	data, err := json.MarshalIndent(notes, "", "  ")
+	if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("failed to marshal search results: %v", err)},
+			},
+			IsError: true,
+		}, nil
+	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(data)},
@@ -596,7 +621,15 @@ func (s *Server) handleListAttachments(ctx context.Context, req *mcp.CallToolReq
 		}, nil
 	}
 
-	data, _ := json.MarshalIndent(attachments, "", "  ")
+	data, err := json.MarshalIndent(attachments, "", "  ")
+	if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("failed to marshal attachments: %v", err)},
+			},
+			IsError: true,
+		}, nil
+	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(data)},
@@ -639,7 +672,15 @@ func (s *Server) handleGetAttachment(ctx context.Context, req *mcp.CallToolReque
 		"data":     base64.StdEncoding.EncodeToString(attachment.Data),
 	}
 
-	data, _ := json.MarshalIndent(result, "", "  ")
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("failed to marshal attachment: %v", err)},
+			},
+			IsError: true,
+		}, nil
+	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(data)},
@@ -647,6 +688,7 @@ func (s *Server) handleGetAttachment(ctx context.Context, req *mcp.CallToolReque
 	}, nil
 }
 
+//nolint:funlen // Export handler has multiple format branches
 func (s *Server) handleExportNote(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var params struct {
 		ID     string `json:"id"`
@@ -705,7 +747,15 @@ func (s *Server) handleExportNote(ctx context.Context, req *mcp.CallToolRequest)
 		"tags":        tags,
 		"attachments": attachments,
 	}
-	data, _ := json.MarshalIndent(export, "", "  ")
+	data, err := json.MarshalIndent(export, "", "  ")
+	if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("failed to marshal export: %v", err)},
+			},
+			IsError: true,
+		}, nil
+	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(data)},

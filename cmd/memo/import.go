@@ -45,7 +45,7 @@ var importCmd = &cobra.Command{
 }
 
 func importJSON(path string) error {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // User-specified file path is expected CLI behavior
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,9 @@ func importJSON(path string) error {
 		}
 
 		for _, tagName := range en.Tags {
-			db.AddTagToNote(dbConn, note.ID, tagName)
+			if err := db.AddTagToNote(dbConn, note.ID, tagName); err != nil {
+				fmt.Printf("Warning: failed to add tag %q: %v\n", tagName, err)
+			}
 		}
 
 		for _, att := range en.Attachments {
@@ -80,7 +82,9 @@ func importJSON(path string) error {
 			if id, err := uuid.Parse(att.ID); err == nil {
 				attachment.ID = id
 			}
-			db.CreateAttachment(dbConn, attachment)
+			if err := db.CreateAttachment(dbConn, attachment); err != nil {
+				fmt.Printf("Warning: failed to create attachment %q: %v\n", att.Filename, err)
+			}
 		}
 
 		count++
@@ -118,7 +122,7 @@ func importMarkdownDir(dir string) error {
 }
 
 func importMarkdownFile(path string) error {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // User-specified file path is expected CLI behavior
 	if err != nil {
 		return err
 	}
@@ -158,7 +162,9 @@ func importMarkdownFile(path string) error {
 	}
 
 	for _, tag := range tags {
-		db.AddTagToNote(dbConn, note.ID, tag)
+		if err := db.AddTagToNote(dbConn, note.ID, tag); err != nil {
+			fmt.Printf("Warning: failed to add tag %q: %v\n", tag, err)
+		}
 	}
 
 	return nil

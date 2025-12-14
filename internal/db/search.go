@@ -29,7 +29,7 @@ func SearchNotes(db *sql.DB, query string, limit int) ([]*SearchResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var results []*SearchResult
 	for rows.Next() {

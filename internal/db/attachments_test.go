@@ -15,10 +15,10 @@ func TestCreateAndGetAttachment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note := models.NewNote("Test", "Content")
-	CreateNote(db, note)
+	_ = CreateNote(db, note)
 
 	data := []byte("test file content")
 	att := models.NewAttachment(note.ID, "test.txt", "text/plain", data)
@@ -45,15 +45,15 @@ func TestListNoteAttachments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note := models.NewNote("Test", "Content")
-	CreateNote(db, note)
+	_ = CreateNote(db, note)
 
 	att1 := models.NewAttachment(note.ID, "file1.txt", "text/plain", []byte("content1"))
 	att2 := models.NewAttachment(note.ID, "file2.txt", "text/plain", []byte("content2"))
-	CreateAttachment(db, att1)
-	CreateAttachment(db, att2)
+	_ = CreateAttachment(db, att1)
+	_ = CreateAttachment(db, att2)
 
 	attachments, err := ListNoteAttachments(db, note.ID)
 	if err != nil {
@@ -70,13 +70,13 @@ func TestDeleteAttachment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note := models.NewNote("Test", "Content")
-	CreateNote(db, note)
+	_ = CreateNote(db, note)
 
 	att := models.NewAttachment(note.ID, "test.txt", "text/plain", []byte("content"))
-	CreateAttachment(db, att)
+	_ = CreateAttachment(db, att)
 
 	if err := DeleteAttachment(db, att.ID); err != nil {
 		t.Fatalf("failed to delete attachment: %v", err)
@@ -93,16 +93,16 @@ func TestCascadeDeleteAttachments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note := models.NewNote("Test", "Content")
-	CreateNote(db, note)
+	_ = CreateNote(db, note)
 
 	att := models.NewAttachment(note.ID, "test.txt", "text/plain", []byte("content"))
-	CreateAttachment(db, att)
+	_ = CreateAttachment(db, att)
 
 	// Delete note should cascade to attachments
-	DeleteNote(db, note.ID)
+	_ = DeleteNote(db, note.ID)
 
 	_, err = GetAttachment(db, att.ID)
 	if err == nil {
@@ -115,13 +115,13 @@ func TestGetAttachmentByPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note := models.NewNote("Test", "Content")
-	CreateNote(db, note)
+	_ = CreateNote(db, note)
 
 	att := models.NewAttachment(note.ID, "test.txt", "text/plain", []byte("content"))
-	CreateAttachment(db, att)
+	_ = CreateAttachment(db, att)
 
 	prefix := att.ID.String()[:8]
 	got, err := GetAttachmentByPrefix(db, prefix)
@@ -139,7 +139,7 @@ func TestGetAttachmentByPrefixTooShort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err = GetAttachmentByPrefix(db, "abc")
 	if err == nil {

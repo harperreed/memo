@@ -15,7 +15,7 @@ func TestGetOrCreateTag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tag1, err := GetOrCreateTag(db, "test")
 	if err != nil {
@@ -37,10 +37,10 @@ func TestAddAndRemoveTagFromNote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note := models.NewNote("Test", "Content")
-	CreateNote(db, note)
+	_ = CreateNote(db, note)
 
 	if err := AddTagToNote(db, note.ID, "important"); err != nil {
 		t.Fatalf("failed to add tag: %v", err)
@@ -70,16 +70,16 @@ func TestListAllTags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note1 := models.NewNote("Note 1", "Content")
 	note2 := models.NewNote("Note 2", "Content")
-	CreateNote(db, note1)
-	CreateNote(db, note2)
+	_ = CreateNote(db, note1)
+	_ = CreateNote(db, note2)
 
-	AddTagToNote(db, note1.ID, "shared")
-	AddTagToNote(db, note2.ID, "shared")
-	AddTagToNote(db, note1.ID, "unique")
+	_ = AddTagToNote(db, note1.ID, "shared")
+	_ = AddTagToNote(db, note2.ID, "shared")
+	_ = AddTagToNote(db, note1.ID, "unique")
 
 	tags, err := ListAllTags(db)
 	if err != nil {

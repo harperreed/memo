@@ -15,7 +15,7 @@ func TestCreateAndGetNote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note := models.NewNote("Test Title", "Test content")
 	if err := CreateNote(db, note); err != nil {
@@ -40,7 +40,7 @@ func TestGetNoteByPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note := models.NewNote("Test", "Content")
 	if err := CreateNote(db, note); err != nil {
@@ -63,7 +63,7 @@ func TestGetNoteByPrefixTooShort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	_, err = GetNoteByPrefix(db, "abc")
 	if err == nil {
@@ -76,12 +76,12 @@ func TestListNotes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note1 := models.NewNote("First", "Content 1")
 	note2 := models.NewNote("Second", "Content 2")
-	CreateNote(db, note1)
-	CreateNote(db, note2)
+	_ = CreateNote(db, note1)
+	_ = CreateNote(db, note2)
 
 	notes, err := ListNotes(db, nil, 20)
 	if err != nil {
@@ -98,10 +98,10 @@ func TestUpdateNote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note := models.NewNote("Original", "Original content")
-	CreateNote(db, note)
+	_ = CreateNote(db, note)
 
 	note.Title = "Updated"
 	note.Content = "Updated content"
@@ -122,10 +122,10 @@ func TestDeleteNote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	note := models.NewNote("ToDelete", "Content")
-	CreateNote(db, note)
+	_ = CreateNote(db, note)
 
 	if err := DeleteNote(db, note.ID); err != nil {
 		t.Fatalf("failed to delete note: %v", err)
@@ -142,7 +142,7 @@ func TestListNotesByDirTag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create notes - one with dir tag, one without
 	dirNote := models.NewNote("Dir Note", "Content in directory")
@@ -197,15 +197,15 @@ func TestListGlobalNotes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create notes - one with dir tag, two without
 	dirNote := models.NewNote("Dir Note", "Content in directory")
 	globalNote1 := models.NewNote("Global 1", "Content everywhere")
 	globalNote2 := models.NewNote("Global 2", "More global content")
-	CreateNote(db, dirNote)
-	CreateNote(db, globalNote1)
-	CreateNote(db, globalNote2)
+	_ = CreateNote(db, dirNote)
+	_ = CreateNote(db, globalNote1)
+	_ = CreateNote(db, globalNote2)
 
 	// Tag one note with a directory
 	if err := AddTagToNote(db, dirNote.ID, "dir:/some/path"); err != nil {
@@ -240,7 +240,7 @@ func TestCountGlobalNotes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Start with zero notes
 	count, err := CountGlobalNotes(db)
@@ -254,9 +254,9 @@ func TestCountGlobalNotes(t *testing.T) {
 	// Create 3 notes, tag 1 with directory
 	for i := 0; i < 3; i++ {
 		note := models.NewNote("Note", "Content")
-		CreateNote(db, note)
+		_ = CreateNote(db, note)
 		if i == 0 {
-			AddTagToNote(db, note.ID, "dir:/some/dir")
+			_ = AddTagToNote(db, note.ID, "dir:/some/dir")
 		}
 	}
 

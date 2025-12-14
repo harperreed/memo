@@ -88,7 +88,7 @@ func TestTagOperations(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 
 	// Add note with tags
-	runMemo(dbPath, "add", "Tagged Note", "--content", "Content", "--tags", "work,urgent")
+	_, _ = runMemo(dbPath, "add", "Tagged Note", "--content", "Content", "--tags", "work,urgent")
 
 	// List by tag
 	out, _ := runMemo(dbPath, "list", "--tag", "work")
@@ -106,8 +106,8 @@ func TestTagOperations(t *testing.T) {
 func TestSearch(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 
-	runMemo(dbPath, "add", "Go Programming", "--content", "Learn about goroutines")
-	runMemo(dbPath, "add", "Cooking", "--content", "How to make pasta")
+	_, _ = runMemo(dbPath, "add", "Go Programming", "--content", "Learn about goroutines")
+	_, _ = runMemo(dbPath, "add", "Cooking", "--content", "How to make pasta")
 
 	out, _ := runMemo(dbPath, "list", "--search", "goroutines")
 	if !strings.Contains(out, "Go Programming") {
@@ -120,7 +120,7 @@ func TestSearch(t *testing.T) {
 
 func runMemo(dbPath string, args ...string) (string, error) {
 	allArgs := append([]string{"--db", dbPath}, args...)
-	cmd := exec.Command(memoBin, allArgs...)
+	cmd := exec.Command(memoBin, allArgs...) //nolint:gosec // Running our own test binary is expected in integration tests
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

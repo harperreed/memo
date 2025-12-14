@@ -107,6 +107,7 @@ func listHere(limit int) error {
 	return nil
 }
 
+//nolint:funlen,nestif // Complex flow for sectioned listing
 func listSectioned(limit int) error {
 	pwd, err := os.Getwd()
 	if err != nil {
@@ -162,7 +163,8 @@ func listSectioned(limit int) error {
 			reader := bufio.NewReader(os.Stdin)
 			response, err := reader.ReadString('\n')
 			if err != nil {
-				return nil
+				// EOF or input error - just don't show more
+				return nil //nolint:nilerr // Intentional: silently exit on stdin issues
 			}
 
 			response = strings.TrimSpace(strings.ToLower(response))

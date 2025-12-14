@@ -60,7 +60,7 @@ func GetNoteByPrefix(db *sql.DB, prefix string) (*models.Note, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var notes []*models.Note
 	for rows.Next() {
@@ -114,7 +114,7 @@ func ListNotes(db *sql.DB, tag *string, limit int) ([]*models.Note, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var notes []*models.Note
 	for rows.Next() {
@@ -185,7 +185,7 @@ func ListNotesByDirTag(db *sql.DB, dirPath string, limit int) ([]*models.Note, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var notes []*models.Note
 	for rows.Next() {
@@ -224,7 +224,7 @@ func ListGlobalNotes(db *sql.DB, limit int) ([]*models.Note, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var notes []*models.Note
 	for rows.Next() {

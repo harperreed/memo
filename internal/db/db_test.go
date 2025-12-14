@@ -17,7 +17,7 @@ func TestOpenCreatesDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		t.Error("expected database file to be created")
@@ -32,7 +32,7 @@ func TestOpenRunsMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Verify tables exist
 	tables := []string{"notes", "tags", "note_tags", "attachments", "notes_fts"}
@@ -53,10 +53,10 @@ func TestOpenRunsMigrations(t *testing.T) {
 func TestDefaultPath(t *testing.T) {
 	// Save and restore XDG_DATA_HOME
 	original := os.Getenv("XDG_DATA_HOME")
-	defer os.Setenv("XDG_DATA_HOME", original)
+	defer func() { _ = os.Setenv("XDG_DATA_HOME", original) }()
 
 	tmpDir := t.TempDir()
-	os.Setenv("XDG_DATA_HOME", tmpDir)
+	_ = os.Setenv("XDG_DATA_HOME", tmpDir)
 
 	path := DefaultPath()
 	expected := filepath.Join(tmpDir, "memo", "memo.db")

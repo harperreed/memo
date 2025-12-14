@@ -126,7 +126,7 @@ func exportJSON(notes []*db.SearchResult, outputPath string) error {
 		return nil
 	}
 
-	return os.WriteFile(outputPath, data, 0644)
+	return os.WriteFile(outputPath, data, 0600)
 }
 
 func exportMarkdown(notes []*db.SearchResult, outputDir string) error {
@@ -134,7 +134,7 @@ func exportMarkdown(notes []*db.SearchResult, outputDir string) error {
 		outputDir = "export"
 	}
 
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0750); err != nil {
 		return err
 	}
 
@@ -163,20 +163,24 @@ func exportMarkdown(notes []*db.SearchResult, outputDir string) error {
 
 		filename := sanitizeFilename(n.Title) + ".md"
 		filePath := filepath.Join(outputDir, filename)
-		if err := os.WriteFile(filePath, []byte(sb.String()), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte(sb.String()), 0600); err != nil {
 			return err
 		}
 
 		// Export attachments
 		if len(attachments) > 0 {
 			attDir := filepath.Join(outputDir, "attachments", n.ID.String()[:8])
-			os.MkdirAll(attDir, 0755)
+			if err := os.MkdirAll(attDir, 0750); err != nil {
+				return fmt.Errorf("failed to create attachments dir: %w", err)
+			}
 
 			for _, a := range attachments {
 				att, _ := db.GetAttachment(dbConn, a.ID)
 				if att != nil {
 					attPath := filepath.Join(attDir, att.Filename)
-					os.WriteFile(attPath, att.Data, 0644)
+					if err := os.WriteFile(attPath, att.Data, 0600); err != nil {
+						return fmt.Errorf("failed to write attachment: %w", err)
+					}
 				}
 			}
 		}

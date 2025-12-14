@@ -30,7 +30,7 @@ var attachCmd = &cobra.Command{
 			return fmt.Errorf("failed to get note: %w", err)
 		}
 
-		data, err := os.ReadFile(filePath)
+		data, err := os.ReadFile(filePath) //nolint:gosec // User-specified file path is expected CLI behavior
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
@@ -73,7 +73,7 @@ var attachGetCmd = &cobra.Command{
 			return err
 		}
 
-		if err := os.WriteFile(outputPath, att.Data, 0644); err != nil {
+		if err := os.WriteFile(outputPath, att.Data, 0600); err != nil {
 			return fmt.Errorf("failed to write file: %w", err)
 		}
 

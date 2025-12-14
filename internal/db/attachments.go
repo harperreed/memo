@@ -68,7 +68,7 @@ func GetAttachmentByPrefix(db *sql.DB, prefix string) (*models.Attachment, error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var count int
 	for rows.Next() {
@@ -119,7 +119,7 @@ func ListNoteAttachments(db *sql.DB, noteID uuid.UUID) ([]*AttachmentMeta, error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var attachments []*AttachmentMeta
 	for rows.Next() {

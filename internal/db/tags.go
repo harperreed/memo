@@ -69,7 +69,7 @@ func GetNoteTags(db *sql.DB, noteID uuid.UUID) ([]*models.Tag, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tags []*models.Tag
 	for rows.Next() {
@@ -101,7 +101,7 @@ func ListAllTags(db *sql.DB) ([]*TagWithCount, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tags []*TagWithCount
 	for rows.Next() {
