@@ -5,11 +5,14 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/harper/memo/internal/db"
+	"github.com/harper/memo/internal/sync"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -40,6 +43,21 @@ var rmCmd = &cobra.Command{
 				fmt.Println("Cancelled.")
 				return nil
 			}
+		}
+
+		// Get attachment IDs before deletion (for sync)
+		attachments, err := db.ListNoteAttachments(dbConn, note.ID)
+		if err != nil {
+			return fmt.Errorf("failed to list attachments: %w", err)
+		}
+		var attachmentIDs []uuid.UUID
+		for _, att := range attachments {
+			attachmentIDs = append(attachmentIDs, att.ID)
+		}
+
+		// Queue sync deletes before local deletion
+		if err := sync.TryQueueNoteDelete(context.Background(), dbConn, note.ID, attachmentIDs); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to queue sync delete: %v\n", err)
 		}
 
 		if err := db.DeleteNote(dbConn, note.ID); err != nil {

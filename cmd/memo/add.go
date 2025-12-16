@@ -4,13 +4,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
+	"suitesync/vault"
+
 	"github.com/harper/memo/internal/db"
 	"github.com/harper/memo/internal/models"
+	"github.com/harper/memo/internal/sync"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -80,9 +84,45 @@ var addCmd = &cobra.Command{
 			}
 		}
 
+		// Queue sync change (best-effort, won't fail if sync not configured)
+		allTags := collectTags(tagsFlag, hereFlag)
+		if err := sync.TryQueueNoteChange(
+			context.Background(),
+			dbConn,
+			note.ID,
+			note.Title,
+			note.Content,
+			allTags,
+			note.CreatedAt,
+			note.UpdatedAt,
+			vault.OpUpsert,
+		); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to queue sync: %v\n", err)
+		}
+
 		fmt.Println(ui.Success(fmt.Sprintf("Created note %s", note.ID.String()[:6])))
 		return nil
 	},
+}
+
+// collectTags gathers all tags that will be applied to a note.
+func collectTags(tagsFlag string, hereFlag bool) []string {
+	var tags []string
+	if tagsFlag != "" {
+		for _, tag := range strings.Split(tagsFlag, ",") {
+			tag = strings.TrimSpace(tag)
+			if tag != "" {
+				tags = append(tags, strings.ToLower(tag))
+			}
+		}
+	}
+	if hereFlag {
+		pwd, err := os.Getwd()
+		if err == nil {
+			tags = append(tags, strings.ToLower("dir:"+pwd))
+		}
+	}
+	return tags
 }
 
 func openEditor(initial string) (string, error) {

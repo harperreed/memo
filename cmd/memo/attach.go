@@ -5,14 +5,18 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"mime"
 	"os"
 	"path/filepath"
 
+	"suitesync/vault"
+
 	"github.com/harper/memo/internal/db"
 	"github.com/harper/memo/internal/models"
+	"github.com/harper/memo/internal/sync"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -44,6 +48,21 @@ var attachCmd = &cobra.Command{
 		att := models.NewAttachment(note.ID, filename, mimeType, data)
 		if err := db.CreateAttachment(dbConn, att); err != nil {
 			return fmt.Errorf("failed to create attachment: %w", err)
+		}
+
+		// Queue sync change
+		if err := sync.TryQueueAttachmentChange(
+			context.Background(),
+			dbConn,
+			att.ID,
+			att.NoteID,
+			att.Filename,
+			att.MimeType,
+			att.Data,
+			att.CreatedAt,
+			vault.OpUpsert,
+		); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to queue sync: %v\n", err)
 		}
 
 		fmt.Println(ui.Success(fmt.Sprintf("Added attachment %s to note %s", att.ID.String()[:6], note.ID.String()[:6])))

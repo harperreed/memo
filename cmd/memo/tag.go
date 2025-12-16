@@ -4,9 +4,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"os"
+
+	"suitesync/vault"
 
 	"github.com/harper/memo/internal/db"
+	"github.com/harper/memo/internal/models"
+	"github.com/harper/memo/internal/sync"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -34,6 +40,11 @@ var tagAddCmd = &cobra.Command{
 			return fmt.Errorf("failed to add tag: %w", err)
 		}
 
+		// Queue sync change with updated tags
+		if err := queueNoteTagSync(note); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to queue sync: %v\n", err)
+		}
+
 		fmt.Println(ui.Success(fmt.Sprintf("Added tag %q to note %s", tagName, note.ID.String()[:6])))
 		return nil
 	},
@@ -54,6 +65,11 @@ var tagRmCmd = &cobra.Command{
 
 		if err := db.RemoveTagFromNote(dbConn, note.ID, tagName); err != nil {
 			return fmt.Errorf("failed to remove tag: %w", err)
+		}
+
+		// Queue sync change with updated tags
+		if err := queueNoteTagSync(note); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to queue sync: %v\n", err)
 		}
 
 		fmt.Println(ui.Success(fmt.Sprintf("Removed tag %q from note %s", tagName, note.ID.String()[:6])))
@@ -92,4 +108,29 @@ func init() {
 	tagCmd.AddCommand(tagRmCmd)
 	tagCmd.AddCommand(tagListCmd)
 	rootCmd.AddCommand(tagCmd)
+}
+
+// queueNoteTagSync queues a sync update for a note after tag changes.
+func queueNoteTagSync(note *models.Note) error {
+	// Get current tags
+	tags, err := db.GetNoteTags(dbConn, note.ID)
+	if err != nil {
+		return err
+	}
+	tagNames := make([]string, 0, len(tags))
+	for _, t := range tags {
+		tagNames = append(tagNames, t.Name)
+	}
+
+	return sync.TryQueueNoteChange(
+		context.Background(),
+		dbConn,
+		note.ID,
+		note.Title,
+		note.Content,
+		tagNames,
+		note.CreatedAt,
+		note.UpdatedAt,
+		vault.OpUpsert,
+	)
 }

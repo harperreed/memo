@@ -4,9 +4,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"os"
 
 	"github.com/harper/memo/internal/db"
+	"github.com/harper/memo/internal/sync"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -17,6 +20,11 @@ var showCmd = &cobra.Command{
 	Long:  `Display a note's full content with rendered markdown.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Sync with server to get latest changes (silent if not configured)
+		if err := sync.TrySync(context.Background(), dbConn); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: sync failed: %v\n", err)
+		}
+
 		prefix := args[0]
 
 		note, err := db.GetNoteByPrefix(dbConn, prefix)

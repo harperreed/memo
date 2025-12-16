@@ -5,11 +5,13 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/harper/memo/internal/db"
+	"github.com/harper/memo/internal/sync"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -21,6 +23,11 @@ var listCmd = &cobra.Command{
 	Short: "List notes",
 	Long:  `List all notes, optionally filtered by tag or search query. By default shows directory-specific notes first, then global notes.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Sync with server to get latest changes (silent if not configured)
+		if err := sync.TrySync(context.Background(), dbConn); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: sync failed: %v\n", err)
+		}
+
 		tagFlag, _ := cmd.Flags().GetString("tag")
 		searchFlag, _ := cmd.Flags().GetString("search")
 		limitFlag, _ := cmd.Flags().GetInt("limit")
