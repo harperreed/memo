@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"suitesync/vault"
+	"github.com/harperreed/sweet/vault"
 
 	"github.com/harper/memo/internal/db"
 	"github.com/harper/memo/internal/sync"

@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"suitesync/vault"
+	"github.com/harperreed/sweet/vault"
 
 	"github.com/harper/memo/internal/db"
 	"github.com/harper/memo/internal/models"

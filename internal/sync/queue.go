@@ -8,7 +8,7 @@ import (
 	"database/sql"
 	"time"
 
-	"suitesync/vault"
+	"github.com/harperreed/sweet/vault"
 
 	"github.com/google/uuid"
 )
