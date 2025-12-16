@@ -87,6 +87,11 @@ registered. Only the derived key is stored locally, not the mnemonic.`,
 			serverURL = "https://api.storeusa.org"
 		}
 
+		// Ensure device ID exists before login (required by v0.3.0)
+		if cfg.DeviceID == "" {
+			cfg.DeviceID = randHex(16)
+		}
+
 		reader := bufio.NewReader(os.Stdin)
 
 		// Get email
@@ -116,10 +121,10 @@ registered. Only the derived key is stored locally, not the mnemonic.`,
 			return fmt.Errorf("invalid recovery phrase: %w", err)
 		}
 
-		// Login to server
+		// Login to server with device ID (v0.3.0 requirement)
 		fmt.Printf("\nLogging in to %s...\n", serverURL)
 		client := vault.NewPBAuthClient(serverURL)
-		result, err := client.Login(context.Background(), email, password)
+		result, err := client.Login(context.Background(), email, password, cfg.DeviceID)
 		if err != nil {
 			return fmt.Errorf("login failed: %w", err)
 		}
@@ -139,9 +144,6 @@ registered. Only the derived key is stored locally, not the mnemonic.`,
 		cfg.TokenExpires = result.Token.Expires.Format(time.RFC3339)
 		cfg.DerivedKey = derivedKeyHex
 		cfg.AutoSync = true // Enable auto-sync by default
-		if cfg.DeviceID == "" {
-			cfg.DeviceID = randHex(16)
-		}
 		if cfg.VaultDB == "" {
 			cfg.VaultDB = sync.ConfigDir() + "/vault.db"
 		}

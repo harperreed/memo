@@ -19,6 +19,10 @@ import (
 )
 
 const (
+	// MemoAppID is the unique application identifier for memo sync.
+	// This UUID isolates memo's data from other apps using the same vault infrastructure.
+	MemoAppID = "c7a3f8d1-5e2b-4a9c-b6d4-e8f912345678"
+
 	EntityNote       = "note"
 	EntityAttachment = "attachment"
 )
@@ -55,6 +59,7 @@ func NewSyncer(cfg *Config, appDB *sql.DB) (*Syncer, error) {
 	}
 
 	client := vault.NewClient(vault.SyncConfig{
+		AppID:     MemoAppID,
 		BaseURL:   cfg.Server,
 		DeviceID:  cfg.DeviceID,
 		AuthToken: cfg.Token,
