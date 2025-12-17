@@ -5,6 +5,7 @@ package sync
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -45,6 +46,54 @@ func TestTryQueueNoteChange_NoConfig(t *testing.T) {
 
 	if err != nil {
 		t.Errorf("TryQueueNoteChange should not error when config doesn't exist, got %v", err)
+	}
+}
+
+func TestTryQueueNoteChange_WithConfig(t *testing.T) {
+	// Test queuing with valid config
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	appDB := setupTestDB(t, tmpDir)
+	defer func() { _ = appDB.Close() }()
+
+	_, phrase, err := vault.NewSeedPhrase()
+	if err != nil {
+		t.Fatalf("NewSeedPhrase failed: %v", err)
+	}
+
+	cfg := &Config{
+		Server:     "https://test.example.com",
+		UserID:     "test-user",
+		Token:      "test-token",
+		DerivedKey: phrase,
+		DeviceID:   "test-device",
+		VaultDB:    filepath.Join(tmpDir, "vault.db"),
+		AutoSync:   false,
+	}
+
+	err = SaveConfig(cfg)
+	if err != nil {
+		t.Fatalf("SaveConfig failed: %v", err)
+	}
+
+	ctx := context.Background()
+	noteID := uuid.New()
+
+	err = TryQueueNoteChange(
+		ctx,
+		appDB,
+		noteID,
+		"Test Note",
+		"Test content",
+		[]string{"tag1"},
+		time.Now(),
+		time.Now(),
+		vault.OpUpsert,
+	)
+
+	if err != nil {
+		t.Errorf("TryQueueNoteChange should not error with valid config, got %v", err)
 	}
 }
 

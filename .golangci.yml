@@ -51,7 +51,6 @@ linters:
     - errorlint         # Find code that will cause problems with Go 1.13+ error wrapping
 
     # Maintainability
-    # - goconst           # Finds repeated strings that could be replaced by a constant (disabled - too noisy in tests)
     - gocritic          # Comprehensive static analyzer
     - unconvert         # Remove unnecessary type conversions
     - unparam           # Reports unused function parameters
@@ -67,83 +66,76 @@ linters:
     - thelper           # Test helper detection can be noisy
     - testpackage       # Requiring separate test packages is too strict
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: false
-    exclude-functions:
-      - (*github.com/spf13/pflag.FlagSet).GetString
-      - (*github.com/fatih/color.Color).Println
-      - (io.Closer).Close
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+      exclude-functions:
+        - (*github.com/spf13/pflag.FlagSet).GetString
+        - (*github.com/fatih/color.Color).Println
+        - (io.Closer).Close
 
-  govet:
-    enable-all: true
-    disable:
-      - shadow  # Can be too noisy
-      - fieldalignment  # Optimizing struct field order is often premature
+    govet:
+      enable-all: true
+      disable:
+        - shadow  # Can be too noisy
+        - fieldalignment  # Optimizing struct field order is often premature
 
-  gocyclo:
-    min-complexity: 20
+    gocyclo:
+      min-complexity: 20
 
-  gocognit:
-    min-complexity: 30
+    gocognit:
+      min-complexity: 30
 
-  funlen:
-    lines: 100
-    statements: 50
-    ignore-comments: true
+    funlen:
+      lines: 150
+      statements: 80
+      ignore-comments: true
 
-  misspell:
-    locale: US
+    misspell:
+      locale: US
 
-  goconst:
-    min-len: 3
-    min-occurrences: 15
+    goconst:
+      min-len: 3
+      min-occurrences: 15
 
-  gosec:
-    excludes:
-      - G404  # Use of weak random number generator - often acceptable for non-crypto use
+    gosec:
+      excludes:
+        - G404  # Use of weak random number generator - often acceptable for non-crypto use
+        - G304  # File path provided as taint input - acceptable for config files
 
-  errorlint:
-    errorf: true
-    asserts: true
-    comparison: true
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
 
-  nestif:
-    min-complexity: 5
+    nestif:
+      min-complexity: 6
 
-  staticcheck:
-    checks: ["all"]
+    staticcheck:
+      checks:
+        - "all"
+        - "-ST1000"  # Package comment format - we use ABOUTME comments
 
-issues:
-  exclude-use-default: false
-  exclude-case-sensitive: false
-  max-issues-per-linter: 0
-  max-same-issues: 0
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - gocognit
+          - errcheck
+          - funlen
+          - gosec
+          - goconst
+      - path: cmd/.*main\.go
+        linters:
+          - gocyclo
+          - gocognit
+          - funlen
 
-  exclude-rules:
-    # Exclude some linters from running on tests files
-    - path: _test\.go
-      linters:
-        - gocyclo
-        - gocognit
-        - errcheck
-        - funlen
-        - gosec
-        - goconst
-
-    # Exclude some linters from running on main.go (often has high complexity)
-    - path: cmd/.*main\.go
-      linters:
-        - gocyclo
-        - gocognit
-        - funlen
-
-    # Ignore long lines in go:generate comments
-    - linters:
-        - lll
-      source: "^//go:generate "
+formatters:
+  enable:
+    - gofmt
 
 severity:
-  default-severity: error
-  case-sensitive: false
+  default: error

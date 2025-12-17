@@ -170,3 +170,70 @@ func TestApplyEnvOverrides(t *testing.T) {
 		}
 	})
 }
+
+func TestLoadConfig(t *testing.T) {
+	// Test loading non-existent config
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Errorf("LoadConfig should not error on missing config, got: %v", err)
+	}
+	if cfg == nil {
+		t.Error("LoadConfig should return default config when file doesn't exist")
+	}
+}
+
+func TestSaveAndLoadConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	cfg := &Config{
+		Server:     "https://test.example.com",
+		UserID:     "test-user",
+		Token:      "test-token",
+		DerivedKey: "test-key",
+		DeviceID:   "test-device",
+		VaultDB:    filepath.Join(tmpDir, "vault.db"),
+		AutoSync:   true,
+	}
+
+	// Save config
+	err := SaveConfig(cfg)
+	if err != nil {
+		t.Fatalf("SaveConfig failed: %v", err)
+	}
+
+	// Load it back
+	loaded, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if loaded.Server != cfg.Server {
+		t.Errorf("Server = %q, want %q", loaded.Server, cfg.Server)
+	}
+	if loaded.UserID != cfg.UserID {
+		t.Errorf("UserID = %q, want %q", loaded.UserID, cfg.UserID)
+	}
+	if loaded.Token != cfg.Token {
+		t.Errorf("Token = %q, want %q", loaded.Token, cfg.Token)
+	}
+}
+
+func TestConfigExists(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	// Create config
+	cfg := defaultConfig()
+	err := SaveConfig(cfg)
+	if err != nil {
+		t.Fatalf("SaveConfig failed: %v", err)
+	}
+
+	// Now should exist
+	if !ConfigExists() {
+		t.Error("ConfigExists should return true after SaveConfig")
+	}
+}
