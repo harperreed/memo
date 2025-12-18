@@ -141,7 +141,6 @@ func TestApplyEnvOverrides(t *testing.T) {
 	t.Run("overrides from env", func(t *testing.T) {
 		t.Setenv("MEMO_SYNC_SERVER", "https://test.example.com")
 		t.Setenv("MEMO_SYNC_TOKEN", "testtoken")
-		t.Setenv("MEMO_SYNC_AUTO", "true")
 
 		cfg := &Config{}
 		applyEnvOverrides(cfg)
@@ -151,22 +150,6 @@ func TestApplyEnvOverrides(t *testing.T) {
 		}
 		if cfg.Token != "testtoken" {
 			t.Errorf("Token = %q, want %q", cfg.Token, "testtoken")
-		}
-		if !cfg.AutoSync {
-			t.Error("AutoSync should be true")
-		}
-	})
-
-	t.Run("auto sync with 1", func(t *testing.T) {
-		t.Setenv("MEMO_SYNC_SERVER", "")
-		t.Setenv("MEMO_SYNC_TOKEN", "")
-		t.Setenv("MEMO_SYNC_AUTO", "1")
-
-		cfg := &Config{}
-		applyEnvOverrides(cfg)
-
-		if !cfg.AutoSync {
-			t.Error("AutoSync should be true when MEMO_SYNC_AUTO=1")
 		}
 	})
 }
@@ -195,7 +178,6 @@ func TestSaveAndLoadConfig(t *testing.T) {
 		DerivedKey: "test-key",
 		DeviceID:   "test-device",
 		VaultDB:    filepath.Join(tmpDir, "vault.db"),
-		AutoSync:   true,
 	}
 
 	// Save config

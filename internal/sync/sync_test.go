@@ -35,7 +35,6 @@ func TestNewSyncer(t *testing.T) {
 		DerivedKey: phrase,
 		DeviceID:   "test-device",
 		VaultDB:    filepath.Join(tmpDir, "vault.db"),
-		AutoSync:   false,
 	}
 
 	syncer, err := NewSyncer(cfg, appDB)
@@ -267,8 +266,8 @@ func TestAutoSyncDisabled(t *testing.T) {
 	syncer := setupTestSyncer(t)
 	defer func() { _ = syncer.Close() }()
 
-	// AutoSync is disabled by default in test setup
-	assert.False(t, syncer.config.AutoSync)
+	// vaultSyncer.CanSync() returns false in test setup (no Server/Token/UserID)
+	assert.False(t, syncer.vaultSyncer.CanSync())
 
 	noteID := uuid.New()
 	createdAt := time.Now().UTC()
@@ -383,7 +382,7 @@ func TestCanSync(t *testing.T) {
 			require.NoError(t, err)
 			defer func() { _ = syncer.Close() }()
 
-			assert.Equal(t, tt.expected, syncer.canSync())
+			assert.Equal(t, tt.expected, syncer.vaultSyncer.CanSync())
 		})
 	}
 }
@@ -521,7 +520,6 @@ func TestNewSyncerWithTokenRefresh(t *testing.T) {
 		DerivedKey:   phrase,
 		DeviceID:     "test-device",
 		VaultDB:      filepath.Join(tmpDir, "vault.db"),
-		AutoSync:     false,
 	}
 
 	syncer, err := NewSyncer(cfg, appDB)
@@ -549,7 +547,6 @@ func TestNewSyncerWithInvalidTokenExpires(t *testing.T) {
 		DerivedKey:   phrase,
 		DeviceID:     "test-device",
 		VaultDB:      filepath.Join(tmpDir, "vault.db"),
-		AutoSync:     false,
 	}
 
 	// Should still create syncer, just with zero time for expires
@@ -561,7 +558,7 @@ func TestNewSyncerWithInvalidTokenExpires(t *testing.T) {
 	assert.NotNil(t, syncer.client)
 }
 
-func TestQueueChangeWithAutoSync(t *testing.T) {
+func TestQueueChangeWithoutSync(t *testing.T) {
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 
@@ -571,15 +568,11 @@ func TestQueueChangeWithAutoSync(t *testing.T) {
 	_, phrase, err := vault.NewSeedPhrase()
 	require.NoError(t, err)
 
-	// Create syncer with AutoSync enabled but no server
+	// Create syncer without server config (canSync returns false)
 	cfg := &Config{
-		Server:     "",
-		UserID:     "",
-		Token:      "",
 		DerivedKey: phrase,
 		DeviceID:   "test-device",
 		VaultDB:    filepath.Join(tmpDir, "vault.db"),
-		AutoSync:   true,
 	}
 
 	syncer, err := NewSyncer(cfg, appDB)
@@ -590,7 +583,7 @@ func TestQueueChangeWithAutoSync(t *testing.T) {
 	createdAt := time.Now().UTC()
 	updatedAt := time.Now().UTC()
 
-	// Queue should succeed even though sync will fail (no server)
+	// Queue should succeed and not attempt sync (no server)
 	err = syncer.QueueNoteChange(ctx, noteID, "Test", "Content", nil, createdAt, updatedAt, vault.OpUpsert)
 	require.NoError(t, err)
 

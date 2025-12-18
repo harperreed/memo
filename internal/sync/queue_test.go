@@ -50,7 +50,7 @@ func TestTryQueueNoteChange_NoConfig(t *testing.T) {
 }
 
 func TestTryQueueNoteChange_WithConfig(t *testing.T) {
-	// Test queuing with valid config
+	// Test queuing with valid config (but no server to avoid sync)
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
@@ -63,13 +63,9 @@ func TestTryQueueNoteChange_WithConfig(t *testing.T) {
 	}
 
 	cfg := &Config{
-		Server:     "https://test.example.com",
-		UserID:     "test-user",
-		Token:      "test-token",
 		DerivedKey: phrase,
 		DeviceID:   "test-device",
 		VaultDB:    filepath.Join(tmpDir, "vault.db"),
-		AutoSync:   false,
 	}
 
 	err = SaveConfig(cfg)

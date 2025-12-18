@@ -26,13 +26,9 @@ func setupTestSyncerWithDB(t *testing.T) (*Syncer, *sql.DB, func()) {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		Server:     "https://test.example.com",
-		UserID:     "test-user",
-		Token:      "test-token",
 		DerivedKey: phrase,
 		DeviceID:   "test-device",
 		VaultDB:    filepath.Join(tmpDir, "vault.db"),
-		AutoSync:   false,
 	}
 
 	syncer, err := NewSyncer(cfg, database)
@@ -58,13 +54,9 @@ func setupTestSyncer(t *testing.T) *Syncer {
 	require.NoError(t, err)
 
 	cfg := &Config{
-		Server:     "https://test.example.com",
-		UserID:     "test-user",
-		Token:      "test-token",
 		DerivedKey: phrase,
 		DeviceID:   "test-device",
 		VaultDB:    filepath.Join(tmpDir, "vault.db"),
-		AutoSync:   false,
 	}
 
 	syncer, err := NewSyncer(cfg, appDB)
