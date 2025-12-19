@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/harper/memo/internal/db"
+	"github.com/harper/memo/internal/charm"
 	"github.com/harper/memo/internal/models"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -91,7 +91,7 @@ func (s *Server) registerTools() {
 	// search_notes
 	s.server.AddTool(&mcp.Tool{
 		Name:        "search_notes",
-		Description: "Full-text search notes",
+		Description: "Search notes by text",
 		InputSchema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -209,20 +209,13 @@ func (s *Server) handleAddNote(ctx context.Context, req *mcp.CallToolRequest) (*
 	}
 
 	note := models.NewNote(params.Title, params.Content)
-	if err := db.CreateNote(s.db, note); err != nil {
+	if err := s.client.CreateNote(note, params.Tags); err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("failed to create note: %v", err)},
 			},
 			IsError: true,
 		}, nil
-	}
-
-	for _, tag := range params.Tags {
-		if err := db.AddTagToNote(s.db, note.ID, tag); err != nil {
-			// Log but don't fail - note was already created
-			continue
-		}
 	}
 
 	return &mcp.CallToolResult{
@@ -242,7 +235,11 @@ func (s *Server) handleListNotes(ctx context.Context, req *mcp.CallToolRequest) 
 		return nil, err
 	}
 
-	notes, err := db.ListNotes(s.db, params.Tag, params.Limit)
+	filter := &charm.NoteFilter{
+		Tag:   params.Tag,
+		Limit: params.Limit,
+	}
+	notes, err := s.client.ListNotes(filter)
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -281,10 +278,10 @@ func (s *Server) handleGetNote(ctx context.Context, req *mcp.CallToolRequest) (*
 
 	// Try parsing as UUID first
 	if id, parseErr := uuid.Parse(params.ID); parseErr == nil {
-		note, err = db.GetNoteByID(s.db, id)
+		note, _, err = s.client.GetNoteByID(id)
 	} else {
 		// Try as prefix
-		note, err = db.GetNoteByPrefix(s.db, params.ID)
+		note, _, err = s.client.GetNoteByPrefix(params.ID)
 	}
 
 	if err != nil {
@@ -324,11 +321,12 @@ func (s *Server) handleUpdateNote(ctx context.Context, req *mcp.CallToolRequest)
 
 	// Get existing note
 	var note *models.Note
+	var tags []string
 	var err error
 	if id, parseErr := uuid.Parse(params.ID); parseErr == nil {
-		note, err = db.GetNoteByID(s.db, id)
+		note, tags, err = s.client.GetNoteByID(id)
 	} else {
-		note, err = db.GetNoteByPrefix(s.db, params.ID)
+		note, tags, err = s.client.GetNoteByPrefix(params.ID)
 	}
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -356,7 +354,7 @@ func (s *Server) handleUpdateNote(ctx context.Context, req *mcp.CallToolRequest)
 	}
 	note.UpdatedAt = time.Now()
 
-	if err := db.UpdateNote(s.db, note); err != nil {
+	if err := s.client.UpdateNote(note, tags); err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("failed to update note: %v", err)},
@@ -386,7 +384,7 @@ func (s *Server) handleDeleteNote(ctx context.Context, req *mcp.CallToolRequest)
 		id = parsedID
 	} else {
 		// Get by prefix first
-		note, err := db.GetNoteByPrefix(s.db, params.ID)
+		note, _, err := s.client.GetNoteByPrefix(params.ID)
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
@@ -398,7 +396,7 @@ func (s *Server) handleDeleteNote(ctx context.Context, req *mcp.CallToolRequest)
 		id = note.ID
 	}
 
-	if err = db.DeleteNote(s.db, id); err != nil {
+	if err = s.client.DeleteNote(id); err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("failed to delete note: %v", err)},
@@ -424,7 +422,11 @@ func (s *Server) handleSearchNotes(ctx context.Context, req *mcp.CallToolRequest
 		return nil, err
 	}
 
-	notes, err := db.SearchNotes(s.db, params.Query, params.Limit)
+	filter := &charm.NoteFilter{
+		Search: params.Query,
+		Limit:  params.Limit,
+	}
+	notes, err := s.client.ListNotes(filter)
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -463,7 +465,7 @@ func (s *Server) handleAddTag(ctx context.Context, req *mcp.CallToolRequest) (*m
 	if parsedID, parseErr := uuid.Parse(params.ID); parseErr == nil {
 		id = parsedID
 	} else {
-		note, err := db.GetNoteByPrefix(s.db, params.ID)
+		note, _, err := s.client.GetNoteByPrefix(params.ID)
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
@@ -475,7 +477,7 @@ func (s *Server) handleAddTag(ctx context.Context, req *mcp.CallToolRequest) (*m
 		id = note.ID
 	}
 
-	if err := db.AddTagToNote(s.db, id, params.Tag); err != nil {
+	if err := s.client.AddTagToNote(id, params.Tag); err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("failed to add tag: %v", err)},
@@ -504,7 +506,7 @@ func (s *Server) handleRemoveTag(ctx context.Context, req *mcp.CallToolRequest) 
 	if parsedID, parseErr := uuid.Parse(params.ID); parseErr == nil {
 		id = parsedID
 	} else {
-		note, err := db.GetNoteByPrefix(s.db, params.ID)
+		note, _, err := s.client.GetNoteByPrefix(params.ID)
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
@@ -516,7 +518,7 @@ func (s *Server) handleRemoveTag(ctx context.Context, req *mcp.CallToolRequest) 
 		id = note.ID
 	}
 
-	if err := db.RemoveTagFromNote(s.db, id, params.Tag); err != nil {
+	if err := s.client.RemoveTagFromNote(id, params.Tag); err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("failed to remove tag: %v", err)},
@@ -547,7 +549,7 @@ func (s *Server) handleAddAttachment(ctx context.Context, req *mcp.CallToolReque
 	if parsedID, parseErr := uuid.Parse(params.ID); parseErr == nil {
 		noteID = parsedID
 	} else {
-		note, err := db.GetNoteByPrefix(s.db, params.ID)
+		note, _, err := s.client.GetNoteByPrefix(params.ID)
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
@@ -571,7 +573,7 @@ func (s *Server) handleAddAttachment(ctx context.Context, req *mcp.CallToolReque
 	}
 
 	attachment := models.NewAttachment(noteID, params.Filename, params.MimeType, data)
-	if err := db.CreateAttachment(s.db, attachment); err != nil {
+	if err := s.client.CreateAttachment(attachment); err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("failed to create attachment: %v", err)},
@@ -599,7 +601,7 @@ func (s *Server) handleListAttachments(ctx context.Context, req *mcp.CallToolReq
 	if parsedID, parseErr := uuid.Parse(params.ID); parseErr == nil {
 		noteID = parsedID
 	} else {
-		note, err := db.GetNoteByPrefix(s.db, params.ID)
+		note, _, err := s.client.GetNoteByPrefix(params.ID)
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
@@ -611,7 +613,7 @@ func (s *Server) handleListAttachments(ctx context.Context, req *mcp.CallToolReq
 		noteID = note.ID
 	}
 
-	attachments, err := db.ListNoteAttachments(s.db, noteID)
+	attachments, err := s.client.ListAttachmentsByNote(noteID)
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -621,7 +623,26 @@ func (s *Server) handleListAttachments(ctx context.Context, req *mcp.CallToolReq
 		}, nil
 	}
 
-	data, err := json.MarshalIndent(attachments, "", "  ")
+	// Strip data from attachments for listing
+	type AttachmentInfo struct {
+		ID        string `json:"id"`
+		NoteID    string `json:"note_id"`
+		Filename  string `json:"filename"`
+		MimeType  string `json:"mime_type"`
+		CreatedAt string `json:"created_at"`
+	}
+	infos := make([]AttachmentInfo, len(attachments))
+	for i, att := range attachments {
+		infos[i] = AttachmentInfo{
+			ID:        att.ID.String(),
+			NoteID:    att.NoteID.String(),
+			Filename:  att.Filename,
+			MimeType:  att.MimeType,
+			CreatedAt: att.CreatedAt.Format(time.RFC3339),
+		}
+	}
+
+	data, err := json.MarshalIndent(infos, "", "  ")
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -648,9 +669,9 @@ func (s *Server) handleGetAttachment(ctx context.Context, req *mcp.CallToolReque
 	var attachment *models.Attachment
 	var err error
 	if id, parseErr := uuid.Parse(params.ID); parseErr == nil {
-		attachment, err = db.GetAttachment(s.db, id)
+		attachment, err = s.client.GetAttachmentByID(id)
 	} else {
-		attachment, err = db.GetAttachmentByPrefix(s.db, params.ID)
+		attachment, err = s.client.GetAttachmentByPrefix(params.ID)
 	}
 
 	if err != nil {
@@ -700,11 +721,12 @@ func (s *Server) handleExportNote(ctx context.Context, req *mcp.CallToolRequest)
 	}
 
 	var note *models.Note
+	var tags []string
 	var err error
 	if id, parseErr := uuid.Parse(params.ID); parseErr == nil {
-		note, err = db.GetNoteByID(s.db, id)
+		note, tags, err = s.client.GetNoteByID(id)
 	} else {
-		note, err = db.GetNoteByPrefix(s.db, params.ID)
+		note, tags, err = s.client.GetNoteByPrefix(params.ID)
 	}
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -715,9 +737,8 @@ func (s *Server) handleExportNote(ctx context.Context, req *mcp.CallToolRequest)
 		}, nil
 	}
 
-	// Get tags and attachments
-	tags, _ := db.GetNoteTags(s.db, note.ID)
-	attachments, _ := db.ListNoteAttachments(s.db, note.ID)
+	// Get attachments
+	attachments, _ := s.client.ListAttachmentsByNote(note.ID)
 
 	if params.Format == "md" {
 		// Export as markdown
@@ -725,7 +746,7 @@ func (s *Server) handleExportNote(ctx context.Context, req *mcp.CallToolRequest)
 		if len(tags) > 0 {
 			result += "\n## Tags\n"
 			for _, tag := range tags {
-				result += fmt.Sprintf("- %s\n", tag.Name)
+				result += fmt.Sprintf("- %s\n", tag)
 			}
 		}
 		if len(attachments) > 0 {
@@ -743,9 +764,19 @@ func (s *Server) handleExportNote(ctx context.Context, req *mcp.CallToolRequest)
 
 	// Export as JSON
 	export := map[string]interface{}{
-		"note":        note,
-		"tags":        tags,
-		"attachments": attachments,
+		"note": note,
+		"tags": tags,
+		"attachments": func() []map[string]interface{} {
+			result := make([]map[string]interface{}, len(attachments))
+			for i, att := range attachments {
+				result[i] = map[string]interface{}{
+					"id":       att.ID.String(),
+					"filename": att.Filename,
+					"mimetype": att.MimeType,
+				}
+			}
+			return result
+		}(),
 	}
 	data, err := json.MarshalIndent(export, "", "  ")
 	if err != nil {

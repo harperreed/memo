@@ -5,18 +5,13 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"mime"
 	"os"
 	"path/filepath"
 
-	"github.com/harperreed/sweet/vault"
-
-	"github.com/harper/memo/internal/db"
 	"github.com/harper/memo/internal/models"
-	"github.com/harper/memo/internal/sync"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -29,7 +24,7 @@ var attachCmd = &cobra.Command{
 		prefix := args[0]
 		filePath := args[1]
 
-		note, err := db.GetNoteByPrefix(dbConn, prefix)
+		note, _, err := charmClient.GetNoteByPrefix(prefix)
 		if err != nil {
 			return fmt.Errorf("failed to get note: %w", err)
 		}
@@ -46,23 +41,8 @@ var attachCmd = &cobra.Command{
 		}
 
 		att := models.NewAttachment(note.ID, filename, mimeType, data)
-		if err := db.CreateAttachment(dbConn, att); err != nil {
+		if err := charmClient.CreateAttachment(att); err != nil {
 			return fmt.Errorf("failed to create attachment: %w", err)
-		}
-
-		// Queue sync change
-		if err := sync.TryQueueAttachmentChange(
-			context.Background(),
-			dbConn,
-			att.ID,
-			att.NoteID,
-			att.Filename,
-			att.MimeType,
-			att.Data,
-			att.CreatedAt,
-			vault.OpUpsert,
-		); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to queue sync: %v\n", err)
 		}
 
 		fmt.Println(ui.Success(fmt.Sprintf("Added attachment %s to note %s", att.ID.String()[:6], note.ID.String()[:6])))
@@ -78,7 +58,7 @@ var attachGetCmd = &cobra.Command{
 		prefix := args[0]
 		outputPath, _ := cmd.Flags().GetString("output")
 
-		att, err := db.GetAttachmentByPrefix(dbConn, prefix)
+		att, err := charmClient.GetAttachmentByPrefix(prefix)
 		if err != nil {
 			return fmt.Errorf("failed to get attachment: %w", err)
 		}

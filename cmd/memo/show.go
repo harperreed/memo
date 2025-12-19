@@ -4,12 +4,9 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"os"
 
-	"github.com/harper/memo/internal/db"
-	"github.com/harper/memo/internal/sync"
+	"github.com/harper/memo/internal/models"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -20,23 +17,17 @@ var showCmd = &cobra.Command{
 	Long:  `Display a note's full content with rendered markdown.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Sync with server to get latest changes (silent if not configured)
-		if err := sync.TrySync(context.Background(), dbConn); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: sync failed: %v\n", err)
-		}
-
 		prefix := args[0]
 
-		note, err := db.GetNoteByPrefix(dbConn, prefix)
+		note, tags, err := charmClient.GetNoteByPrefix(prefix)
 		if err != nil {
 			return fmt.Errorf("failed to get note: %w", err)
 		}
 
-		tags, _ := db.GetNoteTags(dbConn, note.ID)
-		attachments, _ := db.ListNoteAttachments(dbConn, note.ID)
+		attachments, _ := charmClient.ListAttachmentsByNote(note.ID)
 
 		// Print header
-		fmt.Print(ui.FormatNoteHeader(note, tags))
+		fmt.Print(ui.FormatNoteHeader(note, tagsToModelsList(tags)))
 
 		// Print content
 		content, _ := ui.FormatNoteContent(note.Content)
@@ -57,6 +48,15 @@ var showCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// tagsToModelsList converts string tags to model tags.
+func tagsToModelsList(tags []string) []*models.Tag {
+	result := make([]*models.Tag, len(tags))
+	for i, t := range tags {
+		result[i] = models.NewTag(t)
+	}
+	return result
 }
 
 func init() {

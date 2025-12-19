@@ -1,5 +1,5 @@
 // ABOUTME: Integration tests for memo CLI commands.
-// ABOUTME: Tests full workflow from add to delete.
+// ABOUTME: Tests require a running Charm server or CHARM_DATA_DIR to be set.
 
 package test
 
@@ -27,11 +27,21 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// skipIfNoCharm skips the test if Charm is not configured for testing.
+func skipIfNoCharm(t *testing.T) {
+	t.Helper()
+	// Tests require CHARM_DATA_DIR to be set to a temp directory
+	// or a running charm server. For CI, use the testserver package.
+	if os.Getenv("CHARM_DATA_DIR") == "" && os.Getenv("CHARM_HOST") == "" {
+		t.Skip("Skipping: set CHARM_DATA_DIR or CHARM_HOST for integration tests")
+	}
+}
+
 func TestAddListShowDelete(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "test.db")
+	skipIfNoCharm(t)
 
 	// Add a note
-	out, err := runMemo(dbPath, "add", "Test Note", "--content", "Test content here")
+	out, err := runMemo("add", "Test Note", "--content", "Test content here")
 	if err != nil {
 		t.Fatalf("add failed: %v\n%s", err, out)
 	}
@@ -40,7 +50,7 @@ func TestAddListShowDelete(t *testing.T) {
 	}
 
 	// List notes
-	out, err = runMemo(dbPath, "list")
+	out, err = runMemo("list")
 	if err != nil {
 		t.Fatalf("list failed: %v\n%s", err, out)
 	}
@@ -66,7 +76,7 @@ func TestAddListShowDelete(t *testing.T) {
 	}
 
 	// Show note
-	out, err = runMemo(dbPath, "show", idPrefix)
+	out, err = runMemo("show", idPrefix)
 	if err != nil {
 		t.Fatalf("show failed: %v\n%s", err, out)
 	}
@@ -75,7 +85,7 @@ func TestAddListShowDelete(t *testing.T) {
 	}
 
 	// Delete note
-	out, err = runMemo(dbPath, "rm", idPrefix, "--force")
+	out, err = runMemo("rm", idPrefix, "--force")
 	if err != nil {
 		t.Fatalf("rm failed: %v\n%s", err, out)
 	}
@@ -85,31 +95,31 @@ func TestAddListShowDelete(t *testing.T) {
 }
 
 func TestTagOperations(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "test.db")
+	skipIfNoCharm(t)
 
 	// Add note with tags
-	_, _ = runMemo(dbPath, "add", "Tagged Note", "--content", "Content", "--tags", "work,urgent")
+	_, _ = runMemo("add", "Tagged Note", "--content", "Content", "--tags", "work,urgent")
 
 	// List by tag
-	out, _ := runMemo(dbPath, "list", "--tag", "work")
+	out, _ := runMemo("list", "--tag", "work")
 	if !strings.Contains(out, "Tagged Note") {
 		t.Errorf("expected note in tag filter: %s", out)
 	}
 
 	// Tag list
-	out, _ = runMemo(dbPath, "tag", "list")
+	out, _ = runMemo("tag", "list")
 	if !strings.Contains(out, "work") {
 		t.Errorf("expected 'work' tag in list: %s", out)
 	}
 }
 
 func TestSearch(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "test.db")
+	skipIfNoCharm(t)
 
-	_, _ = runMemo(dbPath, "add", "Go Programming", "--content", "Learn about goroutines")
-	_, _ = runMemo(dbPath, "add", "Cooking", "--content", "How to make pasta")
+	_, _ = runMemo("add", "Go Programming", "--content", "Learn about goroutines")
+	_, _ = runMemo("add", "Cooking", "--content", "How to make pasta")
 
-	out, _ := runMemo(dbPath, "list", "--search", "goroutines")
+	out, _ := runMemo("list", "--search", "goroutines")
 	if !strings.Contains(out, "Go Programming") {
 		t.Errorf("expected 'Go Programming' in search: %s", out)
 	}
@@ -118,9 +128,8 @@ func TestSearch(t *testing.T) {
 	}
 }
 
-func runMemo(dbPath string, args ...string) (string, error) {
-	allArgs := append([]string{"--db", dbPath}, args...)
-	cmd := exec.Command(memoBin, allArgs...) //nolint:gosec // Running our own test binary is expected in integration tests
+func runMemo(args ...string) (string, error) {
+	cmd := exec.Command(memoBin, args...) //nolint:gosec // Running our own test binary is expected in integration tests
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

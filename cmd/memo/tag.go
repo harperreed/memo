@@ -4,15 +4,8 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"os"
 
-	"github.com/harperreed/sweet/vault"
-
-	"github.com/harper/memo/internal/db"
-	"github.com/harper/memo/internal/models"
-	"github.com/harper/memo/internal/sync"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -31,18 +24,13 @@ var tagAddCmd = &cobra.Command{
 		prefix := args[0]
 		tagName := args[1]
 
-		note, err := db.GetNoteByPrefix(dbConn, prefix)
+		note, _, err := charmClient.GetNoteByPrefix(prefix)
 		if err != nil {
 			return fmt.Errorf("failed to get note: %w", err)
 		}
 
-		if err := db.AddTagToNote(dbConn, note.ID, tagName); err != nil {
+		if err := charmClient.AddTagToNote(note.ID, tagName); err != nil {
 			return fmt.Errorf("failed to add tag: %w", err)
-		}
-
-		// Queue sync change with updated tags
-		if err := queueNoteTagSync(note); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to queue sync: %v\n", err)
 		}
 
 		fmt.Println(ui.Success(fmt.Sprintf("Added tag %q to note %s", tagName, note.ID.String()[:6])))
@@ -58,18 +46,13 @@ var tagRmCmd = &cobra.Command{
 		prefix := args[0]
 		tagName := args[1]
 
-		note, err := db.GetNoteByPrefix(dbConn, prefix)
+		note, _, err := charmClient.GetNoteByPrefix(prefix)
 		if err != nil {
 			return fmt.Errorf("failed to get note: %w", err)
 		}
 
-		if err := db.RemoveTagFromNote(dbConn, note.ID, tagName); err != nil {
+		if err := charmClient.RemoveTagFromNote(note.ID, tagName); err != nil {
 			return fmt.Errorf("failed to remove tag: %w", err)
-		}
-
-		// Queue sync change with updated tags
-		if err := queueNoteTagSync(note); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to queue sync: %v\n", err)
 		}
 
 		fmt.Println(ui.Success(fmt.Sprintf("Removed tag %q from note %s", tagName, note.ID.String()[:6])))
@@ -81,7 +64,7 @@ var tagListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all tags",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		tags, err := db.ListAllTags(dbConn)
+		tags, err := charmClient.ListAllTags()
 		if err != nil {
 			return fmt.Errorf("failed to list tags: %w", err)
 		}
@@ -108,29 +91,4 @@ func init() {
 	tagCmd.AddCommand(tagRmCmd)
 	tagCmd.AddCommand(tagListCmd)
 	rootCmd.AddCommand(tagCmd)
-}
-
-// queueNoteTagSync queues a sync update for a note after tag changes.
-func queueNoteTagSync(note *models.Note) error {
-	// Get current tags
-	tags, err := db.GetNoteTags(dbConn, note.ID)
-	if err != nil {
-		return err
-	}
-	tagNames := make([]string, 0, len(tags))
-	for _, t := range tags {
-		tagNames = append(tagNames, t.Name)
-	}
-
-	return sync.TryQueueNoteChange(
-		context.Background(),
-		dbConn,
-		note.ID,
-		note.Title,
-		note.Content,
-		tagNames,
-		note.CreatedAt,
-		note.UpdatedAt,
-		vault.OpUpsert,
-	)
 }

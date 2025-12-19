@@ -12,7 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/harper/memo/internal/db"
+	"github.com/harper/memo/internal/charm"
+	"github.com/harper/memo/internal/models"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -50,67 +51,65 @@ var exportCmd = &cobra.Command{
 		outputPath, _ := cmd.Flags().GetString("output")
 		notePrefix, _ := cmd.Flags().GetString("note")
 
-		var notes []*db.SearchResult
+		var notes []*models.Note
+		var noteTags [][]string
 
 		if notePrefix != "" {
-			note, err := db.GetNoteByPrefix(dbConn, notePrefix)
+			note, tags, err := charmClient.GetNoteByPrefix(notePrefix)
 			if err != nil {
 				return fmt.Errorf("failed to get note: %w", err)
 			}
-			notes = append(notes, &db.SearchResult{Note: note})
+			notes = append(notes, note)
+			noteTags = append(noteTags, tags)
 		} else {
-			allNotes, err := db.ListNotes(dbConn, nil, 10000)
+			filter := &charm.NoteFilter{Limit: 10000}
+			allNotes, err := charmClient.ListNotes(filter)
 			if err != nil {
 				return fmt.Errorf("failed to list notes: %w", err)
 			}
 			for _, n := range allNotes {
-				notes = append(notes, &db.SearchResult{Note: n})
+				tags, _ := charmClient.GetNoteTags(n.ID)
+				notes = append(notes, n)
+				noteTags = append(noteTags, tags)
 			}
 		}
 
 		switch format {
 		case "json":
-			return exportJSON(notes, outputPath)
+			return exportJSON(notes, noteTags, outputPath)
 		case "md":
-			return exportMarkdown(notes, outputPath)
+			return exportMarkdown(notes, noteTags, outputPath)
 		default:
 			return fmt.Errorf("unknown format: %s", format)
 		}
 	},
 }
 
-func exportJSON(notes []*db.SearchResult, outputPath string) error {
+func exportJSON(notes []*models.Note, noteTags [][]string, outputPath string) error {
 	export := ExportData{
 		ExportedAt: time.Now(),
 		Version:    "1.0",
 	}
 
-	for _, n := range notes {
-		tags, _ := db.GetNoteTags(dbConn, n.ID)
-		attachments, _ := db.ListNoteAttachments(dbConn, n.ID)
+	for i, n := range notes {
+		attachments, _ := charmClient.ListAttachmentsByNote(n.ID)
 
 		en := ExportNote{
 			ID:        n.ID.String(),
 			Title:     n.Title,
 			Content:   n.Content,
+			Tags:      noteTags[i],
 			CreatedAt: n.CreatedAt,
 			UpdatedAt: n.UpdatedAt,
 		}
 
-		for _, t := range tags {
-			en.Tags = append(en.Tags, t.Name)
-		}
-
-		for _, a := range attachments {
-			att, _ := db.GetAttachment(dbConn, a.ID)
-			if att != nil {
-				en.Attachments = append(en.Attachments, ExportAttachment{
-					ID:       att.ID.String(),
-					Filename: att.Filename,
-					MimeType: att.MimeType,
-					Data:     base64.StdEncoding.EncodeToString(att.Data),
-				})
-			}
+		for _, att := range attachments {
+			en.Attachments = append(en.Attachments, ExportAttachment{
+				ID:       att.ID.String(),
+				Filename: att.Filename,
+				MimeType: att.MimeType,
+				Data:     base64.StdEncoding.EncodeToString(att.Data),
+			})
 		}
 
 		export.Notes = append(export.Notes, en)
@@ -129,7 +128,7 @@ func exportJSON(notes []*db.SearchResult, outputPath string) error {
 	return os.WriteFile(outputPath, data, 0600)
 }
 
-func exportMarkdown(notes []*db.SearchResult, outputDir string) error {
+func exportMarkdown(notes []*models.Note, noteTags [][]string, outputDir string) error {
 	if outputDir == "" {
 		outputDir = "export"
 	}
@@ -138,18 +137,15 @@ func exportMarkdown(notes []*db.SearchResult, outputDir string) error {
 		return err
 	}
 
-	for _, n := range notes {
-		tags, _ := db.GetNoteTags(dbConn, n.ID)
-		attachments, _ := db.ListNoteAttachments(dbConn, n.ID)
+	for i, n := range notes {
+		attachments, _ := charmClient.ListAttachmentsByNote(n.ID)
 
 		en := ExportNote{
 			ID:        n.ID.String(),
 			Title:     n.Title,
+			Tags:      noteTags[i],
 			CreatedAt: n.CreatedAt,
 			UpdatedAt: n.UpdatedAt,
-		}
-		for _, t := range tags {
-			en.Tags = append(en.Tags, t.Name)
 		}
 
 		// Write markdown file with frontmatter
@@ -174,13 +170,10 @@ func exportMarkdown(notes []*db.SearchResult, outputDir string) error {
 				return fmt.Errorf("failed to create attachments dir: %w", err)
 			}
 
-			for _, a := range attachments {
-				att, _ := db.GetAttachment(dbConn, a.ID)
-				if att != nil {
-					attPath := filepath.Join(attDir, att.Filename)
-					if err := os.WriteFile(attPath, att.Data, 0600); err != nil {
-						return fmt.Errorf("failed to write attachment: %w", err)
-					}
+			for _, att := range attachments {
+				attPath := filepath.Join(attDir, att.Filename)
+				if err := os.WriteFile(attPath, att.Data, 0600); err != nil {
+					return fmt.Errorf("failed to write attachment: %w", err)
 				}
 			}
 		}

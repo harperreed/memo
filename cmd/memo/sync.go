@@ -1,364 +1,179 @@
-// ABOUTME: Sync subcommand for vault integration
-// ABOUTME: Provides init, login, status, now, and logout commands for cloud sync
+// ABOUTME: Sync subcommand for Charm cloud integration.
+// ABOUTME: Provides link, unlink, status, and wipe commands for Charm sync.
 
 package main
 
 import (
 	"bufio"
-	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
-	"syscall"
-	"time"
-
-	"github.com/harperreed/sweet/vault"
 
 	"github.com/fatih/color"
-	"github.com/harper/memo/internal/sync"
+	"github.com/harper/memo/internal/charm"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 var syncCmd = &cobra.Command{
 	Use:   "sync",
-	Short: "Manage cloud sync for memo data",
-	Long: `Sync your memo notes securely to the cloud using E2E encryption.
+	Short: "Manage Charm cloud sync",
+	Long: `Sync your memo notes to the Charm cloud.
+
+Charm uses SSH key authentication - no passwords needed.
+Data syncs automatically after each change.
 
 Commands:
-  init    - Initialize sync configuration
-  login   - Login to sync server
-  status  - Show sync status
-  now     - Manually trigger sync
-  logout  - Clear authentication
+  status  - Show sync configuration and connection status
+  link    - Connect this device to Charm cloud
+  unlink  - Disconnect from Charm cloud
+  wipe    - Delete all synced data and start fresh
 
 Examples:
-  memo sync init
-  memo sync login --server https://api.storeusa.org
   memo sync status
-  memo sync now`,
-}
-
-var syncInitCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialize sync configuration",
-	Long:  `Creates a new sync configuration with a unique device ID.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if sync.ConfigExists() {
-			return fmt.Errorf("config already exists at %s\nUse 'memo sync status' to view or delete the file to reinitialize", sync.ConfigPath())
-		}
-
-		cfg, err := sync.InitConfig()
-		if err != nil {
-			return fmt.Errorf("failed to initialize config: %w", err)
-		}
-
-		color.Green("Sync initialized")
-		fmt.Printf("  Config: %s\n", sync.ConfigPath())
-		fmt.Printf("  Device: %s\n", cfg.DeviceID)
-		fmt.Println("\nNext: Run 'memo sync login' to authenticate")
-
-		return nil
-	},
-}
-
-var syncLoginCmd = &cobra.Command{
-	Use:   "login",
-	Short: "Login to sync server",
-	Long: `Login to sync service with your credentials and recovery phrase.
-
-Your recovery phrase is used to derive encryption keys - the server
-never sees your data in plaintext.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		server, _ := cmd.Flags().GetString("server")
-
-		cfg, _ := sync.LoadConfig()
-		if cfg == nil {
-			cfg = &sync.Config{}
-		}
-
-		serverURL := server
-		if serverURL == "" {
-			serverURL = cfg.Server
-		}
-		if serverURL == "" {
-			serverURL = "https://api.storeusa.org"
-		}
-
-		// Ensure device ID exists before login (required by v0.3.0)
-		if cfg.DeviceID == "" {
-			cfg.DeviceID = randHex(16)
-		}
-
-		reader := bufio.NewReader(os.Stdin)
-
-		// Get email
-		fmt.Print("Email: ")
-		email, _ := reader.ReadString('\n')
-		email = strings.TrimSpace(email)
-		if email == "" {
-			return fmt.Errorf("email required")
-		}
-
-		// Get password
-		fmt.Print("Password: ")
-		passwordBytes, err := term.ReadPassword(syscall.Stdin)
-		fmt.Println()
-		if err != nil {
-			return fmt.Errorf("read password: %w", err)
-		}
-		password := string(passwordBytes)
-		if password == "" {
-			return fmt.Errorf("password cannot be empty")
-		}
-
-		// Get mnemonic
-		fmt.Print("Recovery phrase (12 or 24 words): ")
-		mnemonic, _ := reader.ReadString('\n')
-		mnemonic = strings.TrimSpace(mnemonic)
-
-		// Validate mnemonic
-		parsed, err := vault.ParseMnemonic(mnemonic)
-		if err != nil {
-			return fmt.Errorf("invalid recovery phrase: must be 12 or 24 words")
-		}
-		// Verify it's actually 12 or 24 words
-		wordCount := len(strings.Fields(mnemonic))
-		if wordCount != 12 && wordCount != 24 {
-			return fmt.Errorf("invalid recovery phrase: must be 12 or 24 words")
-		}
-		_ = parsed
-
-		// Login to server with device ID (v0.3.0 requirement)
-		fmt.Printf("\nLogging in to %s...\n", serverURL)
-		client := vault.NewPBAuthClient(serverURL)
-		result, err := client.Login(context.Background(), email, password, cfg.DeviceID)
-		if err != nil {
-			return fmt.Errorf("login failed: %w", err)
-		}
-
-		// Derive key from mnemonic (we only store the derived key, not the mnemonic)
-		seed, err := vault.ParseSeedPhrase(mnemonic)
-		if err != nil {
-			return fmt.Errorf("parse mnemonic: %w", err)
-		}
-		derivedKeyHex := hex.EncodeToString(seed.Raw)
-
-		// Save config
-		cfg.Server = serverURL
-		cfg.UserID = result.UserID
-		cfg.Token = result.Token.Token
-		cfg.RefreshToken = result.RefreshToken
-		cfg.TokenExpires = result.Token.Expires.Format(time.RFC3339)
-		cfg.DerivedKey = derivedKeyHex
-		if cfg.VaultDB == "" {
-			cfg.VaultDB = sync.ConfigDir() + "/vault.db"
-		}
-
-		if err := sync.SaveConfig(cfg); err != nil {
-			return fmt.Errorf("save config: %w", err)
-		}
-
-		color.Green("\n✓ Logged in successfully")
-		fmt.Printf("  User ID: %s\n", cfg.UserID)
-		fmt.Printf("  Device: %s\n", cfg.DeviceID[:8]+"...")
-		fmt.Printf("  Token expires: %s\n", result.Token.Expires.Format(time.RFC3339))
-
-		// Sync immediately after login to pull existing data
-		fmt.Println("\nSyncing existing data...")
-		syncer, err := sync.NewSyncer(cfg, dbConn)
-		if err != nil {
-			return fmt.Errorf("create syncer: %w", err)
-		}
-		defer func() { _ = syncer.Close() }()
-
-		ctx := context.Background()
-		if err := syncer.Sync(ctx); err != nil {
-			return fmt.Errorf("initial sync failed: %w", err)
-		}
-
-		color.Green("Sync complete")
-		return nil
-	},
+  memo sync link
+  memo sync link --host charm.example.com`,
 }
 
 var syncStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show sync status",
-	Long:  `Display current sync configuration and authentication status.`,
+	Long:  `Display Charm sync configuration and connection status.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := sync.LoadConfig()
+		cfg, err := charm.LoadConfig()
 		if err != nil {
-			return fmt.Errorf("load config: %w", err)
+			cfg = &charm.Config{AutoSync: true}
 		}
 
-		fmt.Printf("Config:    %s\n", sync.ConfigPath())
-		fmt.Printf("Server:    %s\n", valueOrNone(cfg.Server))
-		fmt.Printf("User ID:   %s\n", valueOrNone(cfg.UserID))
-		fmt.Printf("Device ID: %s\n", valueOrNone(cfg.DeviceID))
-		fmt.Printf("Vault DB:  %s\n", valueOrNone(cfg.VaultDB))
+		fmt.Println("Charm Sync Status")
+		fmt.Println(strings.Repeat("-", 40))
 
-		if cfg.DerivedKey != "" {
-			fmt.Println("Keys:      " + color.GreenString("configured"))
+		// Show config
+		fmt.Printf("Config:    %s\n", charm.ConfigPath())
+		if cfg.CharmHost != "" {
+			fmt.Printf("Host:      %s\n", cfg.CharmHost)
 		} else {
-			fmt.Println("Keys:      " + color.YellowString("(not set)"))
+			fmt.Printf("Host:      %s\n", color.New(color.Faint).Sprint("(default: cloud.charm.sh)"))
 		}
 
-		printTokenStatus(cfg)
+		if cfg.AutoSync {
+			fmt.Printf("Auto-sync: %s\n", color.GreenString("enabled"))
+		} else {
+			fmt.Printf("Auto-sync: %s\n", color.YellowString("disabled"))
+		}
 
-		// Show sync state if configured
-		if cfg.IsConfigured() {
-			syncer, err := sync.NewSyncer(cfg, dbConn)
-			if err == nil {
-				defer func() { _ = syncer.Close() }()
-				ctx := context.Background()
-
-				pending, err := syncer.PendingCount(ctx)
-				if err == nil {
-					fmt.Print("\nPending:   ")
-					if pending == 0 {
-						color.Green("0 changes (up to date)")
-					} else {
-						color.Yellow("%d changes waiting to push", pending)
-					}
-					fmt.Println()
-				}
-
-				lastSeq, err := syncer.LastSyncedSeq(ctx)
-				if err == nil && lastSeq != "0" {
-					fmt.Printf("Last sync: seq %s\n", lastSeq)
-				}
+		// Try to get charm user info
+		if charmClient != nil {
+			user, err := charmClient.User()
+			if err == nil && user != nil {
+				fmt.Println()
+				fmt.Printf("User ID:   %s\n", user.CharmID)
+				fmt.Printf("Name:      %s\n", valueOrNone(user.Name))
+				fmt.Printf("Status:    %s\n", color.GreenString("connected"))
+			} else {
+				fmt.Println()
+				fmt.Printf("Status:    %s\n", color.YellowString("not linked"))
+				fmt.Println("\nRun 'memo sync link' to connect to Charm cloud.")
 			}
+		} else {
+			fmt.Println()
+			fmt.Printf("Status:    %s\n", color.RedString("client not initialized"))
 		}
 
 		return nil
 	},
 }
 
-var syncNowCmd = &cobra.Command{
-	Use:   "now",
-	Short: "Manually trigger sync",
-	Long:  `Push local changes and pull remote changes from the sync server.`,
+var syncLinkCmd = &cobra.Command{
+	Use:   "link",
+	Short: "Connect to Charm cloud",
+	Long: `Link this device to Charm cloud for sync.
+
+Charm uses SSH key authentication. On first link, you'll see
+a code to verify on another device, or you can create a new account.
+
+Your SSH keys are used automatically - no passwords needed.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		verbose, _ := cmd.Flags().GetBool("verbose")
+		host, _ := cmd.Flags().GetString("host")
 
-		cfg, err := sync.LoadConfig()
+		// Load or create config
+		cfg, err := charm.LoadConfig()
 		if err != nil {
-			return fmt.Errorf("load config: %w", err)
+			cfg = &charm.Config{AutoSync: true}
 		}
 
-		if !cfg.IsConfigured() {
-			return fmt.Errorf("sync not configured - run 'memo sync login' first")
+		if host != "" {
+			cfg.CharmHost = host
 		}
 
-		syncer, err := sync.NewSyncer(cfg, dbConn)
-		if err != nil {
-			return fmt.Errorf("create syncer: %w", err)
-		}
-		defer func() { _ = syncer.Close() }()
-
-		ctx := context.Background()
-
-		var events *vault.SyncEvents
-		if verbose {
-			events = &vault.SyncEvents{
-				OnStart: func() {
-					fmt.Println("Syncing...")
-				},
-				OnPush: func(pushed, remaining int) {
-					fmt.Printf("  pushed %d changes (%d remaining)\n", pushed, remaining)
-				},
-				OnPull: func(pulled int) {
-					if pulled > 0 {
-						fmt.Printf("  pulled %d changes\n", pulled)
-					}
-				},
-				OnComplete: func(pushed, pulled int) {
-					fmt.Printf("  Total: %d pushed, %d pulled\n", pushed, pulled)
-				},
-			}
-		} else {
-			fmt.Println("Syncing...")
-		}
-
-		if err := syncer.SyncWithEvents(ctx, events); err != nil {
-			return fmt.Errorf("sync failed: %w", err)
-		}
-
-		color.Green("Sync complete")
-		return nil
-	},
-}
-
-var syncLogoutCmd = &cobra.Command{
-	Use:   "logout",
-	Short: "Clear authentication",
-	Long:  `Remove auth tokens from config. The derived key is preserved for re-login.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := sync.LoadConfig()
-		if err != nil {
-			return fmt.Errorf("load config: %w", err)
-		}
-
-		if cfg.Token == "" {
-			fmt.Println("Not logged in")
-			return nil
-		}
-
-		cfg.Token = ""
-		cfg.RefreshToken = ""
-		cfg.TokenExpires = ""
-
-		if err := sync.SaveConfig(cfg); err != nil {
+		// Save config before linking (in case host changed)
+		if err := charm.SaveConfig(cfg); err != nil {
 			return fmt.Errorf("save config: %w", err)
 		}
 
-		color.Green("Logged out successfully")
+		// Re-initialize client with new config
+		if err := charm.ResetClient(); err != nil {
+			return fmt.Errorf("reset client: %w", err)
+		}
+
+		client, err := charm.GetClient()
+		if err != nil {
+			return fmt.Errorf("get client: %w", err)
+		}
+
+		// Link will prompt for authentication if needed
+		if err := client.Link(); err != nil {
+			return fmt.Errorf("link failed: %w", err)
+		}
+
+		user, err := client.User()
+		if err != nil {
+			return fmt.Errorf("get user: %w", err)
+		}
+
+		color.Green("\n✓ Linked to Charm cloud")
+		fmt.Printf("  User ID: %s\n", user.CharmID)
+		if user.Name != "" {
+			fmt.Printf("  Name:    %s\n", user.Name)
+		}
+		fmt.Println("\nYour notes will now sync automatically.")
+
 		return nil
 	},
 }
 
-var syncPendingCmd = &cobra.Command{
-	Use:   "pending",
-	Short: "Show changes waiting to sync",
-	Long:  `List all changes in the outbox that haven't been pushed to the server yet.`,
+var syncUnlinkCmd = &cobra.Command{
+	Use:   "unlink",
+	Short: "Disconnect from Charm cloud",
+	Long: `Unlink this device from Charm cloud.
+
+This removes your SSH key association but keeps local data.
+You can re-link anytime with 'memo sync link'.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := sync.LoadConfig()
-		if err != nil {
-			return fmt.Errorf("load config: %w", err)
-		}
-
-		if !cfg.IsConfigured() {
-			fmt.Println("Sync not configured. Run 'memo sync login' first.")
+		if charmClient == nil {
+			fmt.Println("Not linked to Charm cloud.")
 			return nil
 		}
 
-		syncer, err := sync.NewSyncer(cfg, dbConn)
-		if err != nil {
-			return fmt.Errorf("create syncer: %w", err)
-		}
-		defer func() { _ = syncer.Close() }()
+		// Confirm with user
+		fmt.Println("This will disconnect this device from Charm cloud.")
+		fmt.Println("Your local notes will be preserved.")
+		fmt.Print("\nType 'unlink' to confirm: ")
 
-		items, err := syncer.PendingChanges(context.Background())
-		if err != nil {
-			return fmt.Errorf("get pending: %w", err)
-		}
+		reader := bufio.NewReader(os.Stdin)
+		confirmation, _ := reader.ReadString('\n')
+		confirmation = strings.TrimSpace(confirmation)
 
-		if len(items) == 0 {
-			color.Green("No pending changes - everything is synced!")
+		if confirmation != "unlink" {
+			fmt.Println("Aborted.")
 			return nil
 		}
 
-		fmt.Printf("Pending changes (%d):\n\n", len(items))
-		for _, item := range items {
-			fmt.Printf("  %s  %-12s  %s\n",
-				color.New(color.Faint).Sprint(item.ChangeID[:8]),
-				item.Entity,
-				item.TS.Format("2006-01-02 15:04:05"))
+		if err := charmClient.Unlink(); err != nil {
+			return fmt.Errorf("unlink failed: %w", err)
 		}
-		fmt.Printf("\nRun 'memo sync now' to push these changes.\n")
+
+		color.Green("\n✓ Unlinked from Charm cloud")
+		fmt.Println("Run 'memo sync link' to reconnect.")
 
 		return nil
 	},
@@ -367,27 +182,25 @@ var syncPendingCmd = &cobra.Command{
 var syncWipeCmd = &cobra.Command{
 	Use:   "wipe",
 	Short: "Wipe all sync data and start fresh",
-	Long: `Clear all server-side sync data and local vault database.
+	Long: `Delete all synced data from Charm cloud and local KV store.
 
-This is useful when:
-- Sync data becomes corrupted
-- You changed userID/AAD strategy mid-stream
-- You want to start fresh during development
+This is the nuclear option - use when:
+- Sync data is corrupted
+- You want to start completely fresh
+- You're cleaning up after development/testing
 
-After wipe, run 'memo sync now' to re-push local data.`,
+After wipe, your local notes will be re-synced on next operation.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := sync.LoadConfig()
-		if err != nil {
-			return fmt.Errorf("load config: %w", err)
-		}
-
-		if !cfg.IsConfigured() {
-			return fmt.Errorf("sync not configured - run 'memo sync login' first")
+		if charmClient == nil {
+			return fmt.Errorf("not connected to Charm - run 'memo sync link' first")
 		}
 
 		// Confirm with user
-		fmt.Println("This will DELETE all sync data on the server and locally.")
-		fmt.Println("Your local memo notes will NOT be affected.")
+		fmt.Println("This will DELETE all sync data:")
+		fmt.Println("  - All notes in Charm cloud")
+		fmt.Println("  - Local KV database")
+		fmt.Println()
+		color.Yellow("This cannot be undone!")
 		fmt.Print("\nType 'wipe' to confirm: ")
 
 		reader := bufio.NewReader(os.Stdin)
@@ -399,43 +212,25 @@ After wipe, run 'memo sync now' to re-push local data.`,
 			return nil
 		}
 
-		// Wipe server-side data
-		fmt.Println("\nWiping server data...")
-		client := vault.NewClient(vault.SyncConfig{
-			BaseURL:   cfg.Server,
-			DeviceID:  cfg.DeviceID,
-			AuthToken: cfg.Token,
-		})
+		fmt.Println("\nWiping data...")
 
-		ctx := context.Background()
-		deleted, err := client.Wipe(ctx)
-		if err != nil {
-			return fmt.Errorf("wipe server data: %w", err)
+		if err := charmClient.Reset(); err != nil {
+			return fmt.Errorf("wipe failed: %w", err)
 		}
-		color.Green("Server data wiped (%d records deleted)", deleted)
 
-		// Remove local vault.db
-		fmt.Println("Removing local vault database...")
-		if err := os.Remove(cfg.VaultDB); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remove vault.db: %w", err)
-		}
-		color.Green("Local vault.db removed")
+		color.Green("✓ All sync data wiped")
+		fmt.Println("\nRun any memo command to start fresh.")
 
-		fmt.Println("\nSync data cleared. Run 'memo sync now' to re-push local data.")
 		return nil
 	},
 }
 
 func init() {
-	syncLoginCmd.Flags().String("server", "", "sync server URL (default: https://api.storeusa.org)")
-	syncNowCmd.Flags().BoolP("verbose", "v", false, "show detailed sync information")
+	syncLinkCmd.Flags().String("host", "", "Charm server host (default: cloud.charm.sh)")
 
-	syncCmd.AddCommand(syncInitCmd)
-	syncCmd.AddCommand(syncLoginCmd)
 	syncCmd.AddCommand(syncStatusCmd)
-	syncCmd.AddCommand(syncNowCmd)
-	syncCmd.AddCommand(syncLogoutCmd)
-	syncCmd.AddCommand(syncPendingCmd)
+	syncCmd.AddCommand(syncLinkCmd)
+	syncCmd.AddCommand(syncUnlinkCmd)
 	syncCmd.AddCommand(syncWipeCmd)
 
 	rootCmd.AddCommand(syncCmd)
@@ -447,63 +242,4 @@ func valueOrNone(s string) string {
 		return "(not set)"
 	}
 	return s
-}
-
-// printTokenStatus displays token validity information.
-func printTokenStatus(cfg *sync.Config) {
-	if cfg.Token == "" {
-		fmt.Println("\nStatus:    " + color.YellowString("Not logged in"))
-		return
-	}
-
-	fmt.Println()
-	if cfg.TokenExpires == "" {
-		fmt.Println("Token:     valid (no expiry info)")
-		return
-	}
-
-	expires, err := time.Parse(time.RFC3339, cfg.TokenExpires)
-	if err != nil {
-		fmt.Printf("Token:     valid (invalid expiry: %v)\n", err)
-		return
-	}
-
-	now := time.Now()
-	if expires.Before(now) {
-		fmt.Print("Token:     ")
-		color.Red("EXPIRED (%s ago)", now.Sub(expires).Round(time.Second))
-		fmt.Println()
-		if cfg.RefreshToken != "" {
-			fmt.Println("           (has refresh token - run 'memo sync now' to refresh)")
-		}
-	} else {
-		fmt.Print("Token:     ")
-		color.Green("valid")
-		fmt.Printf(" (expires in %s)\n", formatDuration(expires.Sub(now)))
-	}
-}
-
-// formatDuration formats a duration in a human-readable way.
-func formatDuration(d time.Duration) string {
-	d = d.Round(time.Second)
-	h := d / time.Hour
-	d -= h * time.Hour
-	m := d / time.Minute
-	d -= m * time.Minute
-	s := d / time.Second
-
-	if h > 0 {
-		return fmt.Sprintf("%dh %dm", h, m)
-	}
-	if m > 0 {
-		return fmt.Sprintf("%dm %ds", m, s)
-	}
-	return fmt.Sprintf("%ds", s)
-}
-
-// randHex returns n random bytes hex-encoded (2n chars).
-func randHex(n int) string {
-	b := make([]byte, n)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
 }

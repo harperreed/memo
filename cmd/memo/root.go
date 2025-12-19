@@ -1,13 +1,12 @@
-// ABOUTME: Root command for memo CLI with database initialization.
+// ABOUTME: Root command for memo CLI with Charm KV initialization.
 // ABOUTME: Handles global flags and persistent pre/post run hooks.
 
 package main
 
 import (
-	"database/sql"
 	"fmt"
 
-	"github.com/harper/memo/internal/db"
+	"github.com/harper/memo/internal/charm"
 	"github.com/spf13/cobra"
 )
 
@@ -19,44 +18,34 @@ const banner = `
 ██║ ╚═╝ ██║███████╗██║ ╚═╝ ██║╚██████╔╝
 ╚═╝     ╚═╝╚══════╝╚═╝     ╚═╝ ╚═════╝
 
-         📝 Markdown notes with MCP ✨
+         📝 Markdown notes with Charm ✨
 `
 
 var (
-	dbPath string
-	dbConn *sql.DB
+	charmClient *charm.Client
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "memo",
 	Short: "A CLI notes tool with markdown support",
-	Long:  banner + `memo is a command-line notes tool that stores markdown notes with tags and attachments in SQLite.`,
+	Long:  banner + `memo is a command-line notes tool that stores markdown notes with tags and attachments using Charm KV.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip DB init for version command
+		// Skip client init for version command
 		if cmd.Name() == "version" {
 			return nil
 		}
 
 		var err error
-		if dbPath == "" {
-			dbPath = db.DefaultPath()
-		}
-		dbConn, err = db.Open(dbPath)
+		charmClient, err = charm.GetClient()
 		if err != nil {
-			return fmt.Errorf("failed to open database: %w", err)
+			return fmt.Errorf("failed to initialize charm client: %w", err)
 		}
 		return nil
 	},
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-		if dbConn != nil {
-			return dbConn.Close()
-		}
+		// Client is global and managed by charm package
 		return nil
 	},
-}
-
-func init() {
-	rootCmd.PersistentFlags().StringVar(&dbPath, "db", "", "database path (default: ~/.local/share/memo/memo.db)")
 }
 
 func Execute() error {

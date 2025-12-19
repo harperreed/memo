@@ -4,17 +4,12 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
-	"github.com/harperreed/sweet/vault"
-
-	"github.com/harper/memo/internal/db"
 	"github.com/harper/memo/internal/models"
-	"github.com/harper/memo/internal/sync"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -55,49 +50,12 @@ var addCmd = &cobra.Command{
 			return fmt.Errorf("note content cannot be empty")
 		}
 
-		note := models.NewNote(title, content)
-		if err := db.CreateNote(dbConn, note); err != nil {
-			return fmt.Errorf("failed to create note: %w", err)
-		}
-
-		// Add tags if provided
-		if tagsFlag != "" {
-			for _, tag := range strings.Split(tagsFlag, ",") {
-				tag = strings.TrimSpace(tag)
-				if tag != "" {
-					if err := db.AddTagToNote(dbConn, note.ID, tag); err != nil {
-						return fmt.Errorf("failed to add tag %q: %w", tag, err)
-					}
-				}
-			}
-		}
-
-		// Add directory tag if --here flag is set
-		if hereFlag {
-			pwd, err := os.Getwd()
-			if err != nil {
-				return fmt.Errorf("failed to get current directory: %w", err)
-			}
-			dirTag := "dir:" + pwd
-			if err := db.AddTagToNote(dbConn, note.ID, dirTag); err != nil {
-				return fmt.Errorf("failed to add directory tag: %w", err)
-			}
-		}
-
-		// Queue sync change (best-effort, won't fail if sync not configured)
+		// Collect all tags
 		allTags := collectTags(tagsFlag, hereFlag)
-		if err := sync.TryQueueNoteChange(
-			context.Background(),
-			dbConn,
-			note.ID,
-			note.Title,
-			note.Content,
-			allTags,
-			note.CreatedAt,
-			note.UpdatedAt,
-			vault.OpUpsert,
-		); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to queue sync: %v\n", err)
+
+		note := models.NewNote(title, content)
+		if err := charmClient.CreateNote(note, allTags); err != nil {
+			return fmt.Errorf("failed to create note: %w", err)
 		}
 
 		fmt.Println(ui.Success(fmt.Sprintf("Created note %s", note.ID.String()[:6])))

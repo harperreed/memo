@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/harper/memo/internal/db"
 	"github.com/harper/memo/internal/models"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -37,27 +36,21 @@ func (s *Server) handleReadResource(ctx context.Context, req *mcp.ReadResourceRe
 
 	// Try to parse as UUID or prefix
 	var note *models.Note
+	var tags []string
 	if noteID, parseErr := uuid.Parse(noteIDStr); parseErr == nil {
-		note, err = db.GetNoteByID(s.db, noteID)
+		note, tags, err = s.client.GetNoteByID(noteID)
 	} else {
-		note, err = db.GetNoteByPrefix(s.db, noteIDStr)
+		note, tags, err = s.client.GetNoteByPrefix(noteIDStr)
 	}
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get note: %w", err)
 	}
 
-	// Get tags
-	tags, _ := db.GetNoteTags(s.db, note.ID)
-	tagNames := make([]string, len(tags))
-	for i, tag := range tags {
-		tagNames[i] = tag.Name
-	}
-
 	// Format as markdown with frontmatter
 	content := fmt.Sprintf("# %s\n\n", note.Title)
-	if len(tagNames) > 0 {
-		content += fmt.Sprintf("**Tags:** %v\n\n", tagNames)
+	if len(tags) > 0 {
+		content += fmt.Sprintf("**Tags:** %v\n\n", tags)
 	}
 	content += note.Content
 

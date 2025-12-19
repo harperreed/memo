@@ -5,18 +5,18 @@ package mcp
 
 import (
 	"context"
-	"database/sql"
 
+	"github.com/harper/memo/internal/charm"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type Server struct {
 	server *mcp.Server
-	db     *sql.DB
+	client *charm.Client
 }
 
-func NewServer(db *sql.DB) *Server {
-	s := &Server{db: db}
+func NewServer(client *charm.Client) *Server {
+	s := &Server{client: client}
 
 	s.server = mcp.NewServer(
 		&mcp.Implementation{

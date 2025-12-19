@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/harper/memo/internal/db"
 	"github.com/harper/memo/internal/models"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
@@ -65,15 +64,9 @@ func importJSON(path string) error {
 		note.CreatedAt = en.CreatedAt
 		note.UpdatedAt = en.UpdatedAt
 
-		if err := db.CreateNote(dbConn, note); err != nil {
+		if err := charmClient.CreateNote(note, en.Tags); err != nil {
 			fmt.Printf("Warning: failed to import %q: %v\n", en.Title, err)
 			continue
-		}
-
-		for _, tagName := range en.Tags {
-			if err := db.AddTagToNote(dbConn, note.ID, tagName); err != nil {
-				fmt.Printf("Warning: failed to add tag %q: %v\n", tagName, err)
-			}
 		}
 
 		for _, att := range en.Attachments {
@@ -82,7 +75,7 @@ func importJSON(path string) error {
 			if id, err := uuid.Parse(att.ID); err == nil {
 				attachment.ID = id
 			}
-			if err := db.CreateAttachment(dbConn, attachment); err != nil {
+			if err := charmClient.CreateAttachment(attachment); err != nil {
 				fmt.Printf("Warning: failed to create attachment %q: %v\n", att.Filename, err)
 			}
 		}
@@ -157,14 +150,8 @@ func importMarkdownFile(path string) error {
 	}
 
 	note := models.NewNote(title, content)
-	if err := db.CreateNote(dbConn, note); err != nil {
+	if err := charmClient.CreateNote(note, tags); err != nil {
 		return err
-	}
-
-	for _, tag := range tags {
-		if err := db.AddTagToNote(dbConn, note.ID, tag); err != nil {
-			fmt.Printf("Warning: failed to add tag %q: %v\n", tag, err)
-		}
 	}
 
 	return nil

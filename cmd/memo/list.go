@@ -5,13 +5,12 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/harper/memo/internal/db"
-	"github.com/harper/memo/internal/sync"
+	"github.com/harper/memo/internal/charm"
+	"github.com/harper/memo/internal/models"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -23,11 +22,6 @@ var listCmd = &cobra.Command{
 	Short: "List notes",
 	Long:  `List all notes, optionally filtered by tag or search query. By default shows directory-specific notes first, then global notes.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Sync with server to get latest changes (silent if not configured)
-		if err := sync.TrySync(context.Background(), dbConn); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: sync failed: %v\n", err)
-		}
-
 		tagFlag, _ := cmd.Flags().GetString("tag")
 		searchFlag, _ := cmd.Flags().GetString("search")
 		limitFlag, _ := cmd.Flags().GetInt("limit")
@@ -54,26 +48,33 @@ var listCmd = &cobra.Command{
 }
 
 func listSearch(query string, limit int) error {
-	results, err := db.SearchNotes(dbConn, query, limit)
+	filter := &charm.NoteFilter{
+		Search: query,
+		Limit:  limit,
+	}
+	notes, err := charmClient.ListNotes(filter)
 	if err != nil {
 		return fmt.Errorf("search failed: %w", err)
 	}
 
-	if len(results) == 0 {
+	if len(notes) == 0 {
 		fmt.Println("No notes found.")
 		return nil
 	}
 
-	for _, result := range results {
-		tags, _ := db.GetNoteTags(dbConn, result.ID)
-		fmt.Print(ui.FormatNoteListItem(result.Note, tags))
+	for _, note := range notes {
+		tags, _ := charmClient.GetNoteTags(note.ID)
+		fmt.Print(ui.FormatNoteListItem(note, tagsToModels(tags)))
 	}
 	return nil
 }
 
 func listByTag(tagName string, limit int) error {
-	tag := &tagName
-	notes, err := db.ListNotes(dbConn, tag, limit)
+	filter := &charm.NoteFilter{
+		Tag:   &tagName,
+		Limit: limit,
+	}
+	notes, err := charmClient.ListNotes(filter)
 	if err != nil {
 		return fmt.Errorf("failed to list notes: %w", err)
 	}
@@ -84,8 +85,8 @@ func listByTag(tagName string, limit int) error {
 	}
 
 	for _, note := range notes {
-		tags, _ := db.GetNoteTags(dbConn, note.ID)
-		fmt.Print(ui.FormatNoteListItem(note, tags))
+		tags, _ := charmClient.GetNoteTags(note.ID)
+		fmt.Print(ui.FormatNoteListItem(note, tagsToModels(tags)))
 	}
 	return nil
 }
@@ -96,7 +97,11 @@ func listHere(limit int) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	notes, err := db.ListNotesByDirTag(dbConn, pwd, limit)
+	filter := &charm.NoteFilter{
+		DirTag: &pwd,
+		Limit:  limit,
+	}
+	notes, err := charmClient.ListNotes(filter)
 	if err != nil {
 		return fmt.Errorf("failed to list notes: %w", err)
 	}
@@ -108,8 +113,8 @@ func listHere(limit int) error {
 
 	fmt.Print(ui.FormatDirSectionHeader(pwd))
 	for _, note := range notes {
-		tags, _ := db.GetNoteTags(dbConn, note.ID)
-		fmt.Print(ui.FormatNoteListItem(note, tags))
+		tags, _ := charmClient.GetNoteTags(note.ID)
+		fmt.Print(ui.FormatNoteListItem(note, tagsToModels(tags)))
 	}
 	return nil
 }
@@ -122,19 +127,27 @@ func listSectioned(limit int) error {
 	}
 
 	// Get directory-specific notes
-	dirNotes, err := db.ListNotesByDirTag(dbConn, pwd, limit)
+	dirFilter := &charm.NoteFilter{
+		DirTag: &pwd,
+		Limit:  limit,
+	}
+	dirNotes, err := charmClient.ListNotes(dirFilter)
 	if err != nil {
 		return fmt.Errorf("failed to list directory notes: %w", err)
 	}
 
 	// Get global notes (no dir: tag)
-	globalNotes, err := db.ListGlobalNotes(dbConn, defaultGlobalLimit)
+	globalFilter := &charm.NoteFilter{
+		Global: true,
+		Limit:  defaultGlobalLimit,
+	}
+	globalNotes, err := charmClient.ListNotes(globalFilter)
 	if err != nil {
 		return fmt.Errorf("failed to list global notes: %w", err)
 	}
 
 	// Get total count for "show more" logic
-	totalGlobal, err := db.CountGlobalNotes(dbConn)
+	totalGlobal, err := charmClient.CountGlobalNotes()
 	if err != nil {
 		return fmt.Errorf("failed to count global notes: %w", err)
 	}
@@ -149,8 +162,8 @@ func listSectioned(limit int) error {
 	if len(dirNotes) > 0 {
 		fmt.Print(ui.FormatDirSectionHeader(pwd))
 		for _, note := range dirNotes {
-			tags, _ := db.GetNoteTags(dbConn, note.ID)
-			fmt.Print(ui.FormatNoteListItem(note, tags))
+			tags, _ := charmClient.GetNoteTags(note.ID)
+			fmt.Print(ui.FormatNoteListItem(note, tagsToModels(tags)))
 		}
 	}
 
@@ -158,8 +171,8 @@ func listSectioned(limit int) error {
 	if len(globalNotes) > 0 {
 		fmt.Print(ui.FormatGlobalSectionHeader())
 		for _, note := range globalNotes {
-			tags, _ := db.GetNoteTags(dbConn, note.ID)
-			fmt.Print(ui.FormatNoteListItem(note, tags))
+			tags, _ := charmClient.GetNoteTags(note.ID)
+			fmt.Print(ui.FormatNoteListItem(note, tagsToModels(tags)))
 		}
 
 		// Show more prompt if there are more global notes
@@ -177,7 +190,11 @@ func listSectioned(limit int) error {
 			response = strings.TrimSpace(strings.ToLower(response))
 			if response == "y" || response == "yes" {
 				// Fetch remaining notes
-				allGlobal, err := db.ListGlobalNotes(dbConn, totalGlobal)
+				allGlobalFilter := &charm.NoteFilter{
+					Global: true,
+					Limit:  totalGlobal,
+				}
+				allGlobal, err := charmClient.ListNotes(allGlobalFilter)
 				if err != nil {
 					return fmt.Errorf("failed to list remaining notes: %w", err)
 				}
@@ -186,14 +203,23 @@ func listSectioned(limit int) error {
 				fmt.Println()
 				for i := defaultGlobalLimit; i < len(allGlobal); i++ {
 					note := allGlobal[i]
-					tags, _ := db.GetNoteTags(dbConn, note.ID)
-					fmt.Print(ui.FormatNoteListItem(note, tags))
+					tags, _ := charmClient.GetNoteTags(note.ID)
+					fmt.Print(ui.FormatNoteListItem(note, tagsToModels(tags)))
 				}
 			}
 		}
 	}
 
 	return nil
+}
+
+// tagsToModels converts string tags to model tags for UI formatting.
+func tagsToModels(tags []string) []*models.Tag {
+	result := make([]*models.Tag, len(tags))
+	for i, t := range tags {
+		result[i] = models.NewTag(t)
+	}
+	return result
 }
 
 func init() {
