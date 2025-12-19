@@ -4,6 +4,7 @@
 package charm
 
 import (
+	"fmt"
 	"os"
 	"sync"
 
@@ -46,7 +47,7 @@ func InitClient() error {
 			}
 		}
 
-		db, err := kv.OpenWithDefaults(DBName)
+		db, err := kv.OpenWithDefaultsFallback(DBName)
 		if err != nil {
 			clientErr = err
 			return
@@ -57,8 +58,8 @@ func InitClient() error {
 			config: cfg,
 		}
 
-		// Sync on startup to pull remote data
-		if cfg.AutoSync {
+		// Sync on startup to pull remote data (skip in read-only mode)
+		if cfg.AutoSync && !db.IsReadOnly() {
 			_ = db.Sync() // Best effort
 		}
 	})
@@ -86,14 +87,23 @@ func (c *Client) KV() *kv.KV {
 	return c.kv
 }
 
+// IsReadOnly returns true if the database is open in read-only mode.
+// This happens when another process (like an MCP server) holds the lock.
+func (c *Client) IsReadOnly() bool {
+	return c.kv.IsReadOnly()
+}
+
 // Sync triggers a manual sync with the charm server.
 func (c *Client) Sync() error {
+	if c.kv.IsReadOnly() {
+		return nil // Skip sync in read-only mode
+	}
 	return c.kv.Sync()
 }
 
 // syncIfEnabled syncs if auto_sync is enabled.
 func (c *Client) syncIfEnabled() {
-	if c.config.AutoSync {
+	if c.config.AutoSync && !c.kv.IsReadOnly() {
 		_ = c.kv.Sync() // Best effort
 	}
 }
@@ -114,6 +124,9 @@ func (c *Client) Config() *Config {
 
 // Set stores a value with the given key and syncs.
 func (c *Client) Set(key, value []byte) error {
+	if c.kv.IsReadOnly() {
+		return fmt.Errorf("cannot write: database is locked by another process (MCP server?)")
+	}
 	if err := c.kv.Set(key, value); err != nil {
 		return err
 	}
@@ -128,6 +141,9 @@ func (c *Client) Get(key []byte) ([]byte, error) {
 
 // Delete removes a key and syncs.
 func (c *Client) Delete(key []byte) error {
+	if c.kv.IsReadOnly() {
+		return fmt.Errorf("cannot write: database is locked by another process (MCP server?)")
+	}
 	if err := c.kv.Delete(key); err != nil {
 		return err
 	}
@@ -137,6 +153,9 @@ func (c *Client) Delete(key []byte) error {
 
 // Reset clears all data (nuclear option).
 func (c *Client) Reset() error {
+	if c.kv.IsReadOnly() {
+		return fmt.Errorf("cannot write: database is locked by another process (MCP server?)")
+	}
 	return c.kv.Reset()
 }
 
@@ -164,6 +183,9 @@ func (c *Client) Link() error {
 // Unlink removes the charm account association from this device
 // This clears the local KV data; the SSH key remains but data is detached.
 func (c *Client) Unlink() error {
+	if c.kv.IsReadOnly() {
+		return fmt.Errorf("cannot write: database is locked by another process (MCP server?)")
+	}
 	// Reset the KV store to clear all data
 	if err := c.kv.Reset(); err != nil {
 		return err
