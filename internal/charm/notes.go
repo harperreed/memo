@@ -4,6 +4,7 @@
 package charm
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/charmbracelet/charm/kv"
 	"github.com/google/uuid"
 	"github.com/harper/memo/internal/models"
 )
@@ -83,7 +84,7 @@ func (c *Client) CreateNote(note *models.Note, tags []string) error {
 func (c *Client) GetNoteByID(id uuid.UUID) (*models.Note, []string, error) {
 	data, err := c.Get(noteKey(id))
 	if err != nil {
-		if errors.Is(err, badger.ErrKeyNotFound) {
+		if errors.Is(err, kv.ErrMissingKey) {
 			return nil, nil, ErrNoteNotFound
 		}
 		return nil, nil, err
@@ -107,33 +108,31 @@ func (c *Client) GetNoteByPrefix(prefix string) (*models.Note, []string, error) 
 		return nil, nil, ErrPrefixTooShort
 	}
 
-	var matches []*NoteData
 	searchPrefix := []byte(NotePrefix + prefix)
 
-	err := c.kv.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = true
-		it := txn.NewIterator(opts)
-		defer it.Close()
-
-		for it.Seek(searchPrefix); it.ValidForPrefix(searchPrefix); it.Next() {
-			item := it.Item()
-			err := item.Value(func(val []byte) error {
-				var nd NoteData
-				if err := json.Unmarshal(val, &nd); err != nil {
-					return err
-				}
-				matches = append(matches, &nd)
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	// Get all keys and filter by prefix
+	keys, err := c.kv.Keys()
 	if err != nil {
 		return nil, nil, err
+	}
+
+	matches := make([]*NoteData, 0, len(keys))
+
+	for _, key := range keys {
+		if !bytes.HasPrefix(key, searchPrefix) {
+			continue
+		}
+
+		val, err := c.kv.Get(key)
+		if err != nil {
+			continue // Skip keys that can't be read
+		}
+
+		var nd NoteData
+		if err := json.Unmarshal(val, &nd); err != nil {
+			continue // Skip invalid data
+		}
+		matches = append(matches, &nd)
 	}
 
 	if len(matches) == 0 {
@@ -161,39 +160,37 @@ type NoteFilter struct {
 
 // ListNotes returns notes matching the filter, sorted by updated_at desc.
 func (c *Client) ListNotes(filter *NoteFilter) ([]*models.Note, error) {
-	var notes []*NoteData
-
 	prefix := []byte(NotePrefix)
-	err := c.kv.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = true
-		it := txn.NewIterator(opts)
-		defer it.Close()
 
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			err := item.Value(func(val []byte) error {
-				var nd NoteData
-				if err := json.Unmarshal(val, &nd); err != nil {
-					return err
-				}
-
-				// Apply filters
-				if !matchesFilter(&nd, filter) {
-					return nil
-				}
-
-				notes = append(notes, &nd)
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	// Get all keys and filter by prefix
+	keys, err := c.kv.Keys()
 	if err != nil {
 		return nil, err
+	}
+
+	notes := make([]*NoteData, 0, len(keys))
+
+	for _, key := range keys {
+		if !bytes.HasPrefix(key, prefix) {
+			continue
+		}
+
+		val, err := c.kv.Get(key)
+		if err != nil {
+			continue // Skip keys that can't be read
+		}
+
+		var nd NoteData
+		if err := json.Unmarshal(val, &nd); err != nil {
+			continue // Skip invalid data
+		}
+
+		// Apply filters
+		if !matchesFilter(&nd, filter) {
+			continue
+		}
+
+		notes = append(notes, &nd)
 	}
 
 	// Sort by updated_at descending
@@ -299,7 +296,7 @@ func (c *Client) DeleteNote(id uuid.UUID) error {
 
 	// Delete the note
 	if err := c.Delete(noteKey(id)); err != nil {
-		if errors.Is(err, badger.ErrKeyNotFound) {
+		if errors.Is(err, kv.ErrMissingKey) {
 			return ErrNoteNotFound
 		}
 		return err
@@ -318,39 +315,39 @@ func (c *Client) CountGlobalNotes() (int, error) {
 	count := 0
 	prefix := []byte(NotePrefix)
 
-	err := c.kv.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = true
-		it := txn.NewIterator(opts)
-		defer it.Close()
+	// Get all keys and filter by prefix
+	keys, err := c.kv.Keys()
+	if err != nil {
+		return 0, err
+	}
 
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			err := item.Value(func(val []byte) error {
-				var nd NoteData
-				if err := json.Unmarshal(val, &nd); err != nil {
-					return err
-				}
+	for _, key := range keys {
+		if !bytes.HasPrefix(key, prefix) {
+			continue
+		}
 
-				// Check if has any dir: tag
-				isGlobal := true
-				for _, tag := range nd.Tags {
-					if strings.HasPrefix(strings.ToLower(tag), "dir:") {
-						isGlobal = false
-						break
-					}
-				}
-				if isGlobal {
-					count++
-				}
-				return nil
-			})
-			if err != nil {
-				return err
+		val, err := c.kv.Get(key)
+		if err != nil {
+			continue // Skip keys that can't be read
+		}
+
+		var nd NoteData
+		if err := json.Unmarshal(val, &nd); err != nil {
+			continue // Skip invalid data
+		}
+
+		// Check if has any dir: tag
+		isGlobal := true
+		for _, tag := range nd.Tags {
+			if strings.HasPrefix(strings.ToLower(tag), "dir:") {
+				isGlobal = false
+				break
 			}
 		}
-		return nil
-	})
+		if isGlobal {
+			count++
+		}
+	}
 
-	return count, err
+	return count, nil
 }

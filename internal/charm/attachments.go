@@ -4,13 +4,14 @@
 package charm
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/charmbracelet/charm/kv"
 	"github.com/google/uuid"
 	"github.com/harper/memo/internal/models"
 )
@@ -89,7 +90,7 @@ func (c *Client) CreateAttachment(att *models.Attachment) error {
 func (c *Client) GetAttachmentByID(id uuid.UUID) (*models.Attachment, error) {
 	data, err := c.Get(attachmentKey(id))
 	if err != nil {
-		if errors.Is(err, badger.ErrKeyNotFound) {
+		if errors.Is(err, kv.ErrMissingKey) {
 			return nil, ErrAttachmentNotFound
 		}
 		return nil, err
@@ -109,33 +110,31 @@ func (c *Client) GetAttachmentByPrefix(prefix string) (*models.Attachment, error
 		return nil, ErrPrefixTooShort
 	}
 
-	var matches []*AttachmentData
 	searchPrefix := []byte(AttachmentPrefix + prefix)
 
-	err := c.kv.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = true
-		it := txn.NewIterator(opts)
-		defer it.Close()
-
-		for it.Seek(searchPrefix); it.ValidForPrefix(searchPrefix); it.Next() {
-			item := it.Item()
-			err := item.Value(func(val []byte) error {
-				var ad AttachmentData
-				if err := json.Unmarshal(val, &ad); err != nil {
-					return err
-				}
-				matches = append(matches, &ad)
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	// Get all keys and filter by prefix
+	keys, err := c.kv.Keys()
 	if err != nil {
 		return nil, err
+	}
+
+	matches := make([]*AttachmentData, 0, len(keys))
+
+	for _, key := range keys {
+		if !bytes.HasPrefix(key, searchPrefix) {
+			continue
+		}
+
+		val, err := c.kv.Get(key)
+		if err != nil {
+			continue // Skip keys that can't be read
+		}
+
+		var ad AttachmentData
+		if err := json.Unmarshal(val, &ad); err != nil {
+			continue // Skip invalid data
+		}
+		matches = append(matches, &ad)
 	}
 
 	if len(matches) == 0 {
@@ -154,42 +153,43 @@ func (c *Client) ListAttachmentsByNote(noteID uuid.UUID) ([]*models.Attachment, 
 	prefix := []byte(AttachmentPrefix)
 	noteIDStr := noteID.String()
 
-	err := c.kv.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = true
-		it := txn.NewIterator(opts)
-		defer it.Close()
+	// Get all keys and filter by prefix
+	keys, err := c.kv.Keys()
+	if err != nil {
+		return nil, err
+	}
 
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			err := item.Value(func(val []byte) error {
-				var ad AttachmentData
-				if err := json.Unmarshal(val, &ad); err != nil {
-					return err
-				}
-				if ad.NoteID == noteIDStr {
-					att, err := ad.ToModel()
-					if err != nil {
-						return err
-					}
-					attachments = append(attachments, att)
-				}
-				return nil
-			})
-			if err != nil {
-				return err
-			}
+	for _, key := range keys {
+		if !bytes.HasPrefix(key, prefix) {
+			continue
 		}
-		return nil
-	})
 
-	return attachments, err
+		val, err := c.kv.Get(key)
+		if err != nil {
+			continue // Skip keys that can't be read
+		}
+
+		var ad AttachmentData
+		if err := json.Unmarshal(val, &ad); err != nil {
+			continue // Skip invalid data
+		}
+
+		if ad.NoteID == noteIDStr {
+			att, err := ad.ToModel()
+			if err != nil {
+				continue // Skip invalid attachments
+			}
+			attachments = append(attachments, att)
+		}
+	}
+
+	return attachments, nil
 }
 
 // DeleteAttachment deletes an attachment by ID.
 func (c *Client) DeleteAttachment(id uuid.UUID) error {
 	if err := c.Delete(attachmentKey(id)); err != nil {
-		if errors.Is(err, badger.ErrKeyNotFound) {
+		if errors.Is(err, kv.ErrMissingKey) {
 			return ErrAttachmentNotFound
 		}
 		return err
@@ -207,7 +207,7 @@ func (c *Client) deleteAttachmentsByNote(noteID uuid.UUID) error {
 	for _, att := range attachments {
 		if err := c.Delete(attachmentKey(att.ID)); err != nil {
 			// Ignore not found errors during cascade
-			if !errors.Is(err, badger.ErrKeyNotFound) {
+			if !errors.Is(err, kv.ErrMissingKey) {
 				return err
 			}
 		}

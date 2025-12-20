@@ -4,11 +4,11 @@
 package charm
 
 import (
+	"bytes"
 	"encoding/json"
 	"sort"
 	"strings"
 
-	"github.com/dgraph-io/badger/v3"
 	"github.com/google/uuid"
 	"github.com/harper/memo/internal/models"
 )
@@ -24,32 +24,30 @@ func (c *Client) ListAllTags() ([]*TagWithCount, error) {
 	tagCounts := make(map[string]int)
 	prefix := []byte(NotePrefix)
 
-	err := c.kv.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		opts.PrefetchValues = true
-		it := txn.NewIterator(opts)
-		defer it.Close()
-
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			err := item.Value(func(val []byte) error {
-				var nd NoteData
-				if err := json.Unmarshal(val, &nd); err != nil {
-					return err
-				}
-				for _, tag := range nd.Tags {
-					tagCounts[strings.ToLower(tag)]++
-				}
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	// Get all keys and filter by prefix
+	keys, err := c.kv.Keys()
 	if err != nil {
 		return nil, err
+	}
+
+	for _, key := range keys {
+		if !bytes.HasPrefix(key, prefix) {
+			continue
+		}
+
+		val, err := c.kv.Get(key)
+		if err != nil {
+			continue // Skip keys that can't be read
+		}
+
+		var nd NoteData
+		if err := json.Unmarshal(val, &nd); err != nil {
+			continue // Skip invalid data
+		}
+
+		for _, tag := range nd.Tags {
+			tagCounts[strings.ToLower(tag)]++
+		}
 	}
 
 	// Convert to TagWithCount slice
