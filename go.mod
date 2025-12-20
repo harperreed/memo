@@ -2,8 +2,8 @@ module github.com/harper/memo
 
 go 1.24.11
 
-// Use 2389-research fork for self-hosted charm server (local SQLite-based version)
-replace github.com/charmbracelet/charm => /Users/harper/Public/src/2389/charm
+// Use 2389-research fork for self-hosted charm server (SQLite-based version)
+replace github.com/charmbracelet/charm => github.com/2389-research/charm v0.0.0-20251220172505-c2ebc1f30d74
 
 require (
 	github.com/charmbracelet/charm v0.0.0-00010101000000-000000000000
