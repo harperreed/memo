@@ -111,30 +111,34 @@ func (c *Client) GetAttachmentByPrefix(prefix string) (*models.Attachment, error
 	}
 
 	searchPrefix := []byte(AttachmentPrefix + prefix)
+	var matches []*AttachmentData
 
-	// Get all keys and filter by prefix
-	keys, err := c.kv.Keys()
+	err := c.DoReadOnly(func(k *kv.KV) error {
+		keys, err := k.Keys()
+		if err != nil {
+			return err
+		}
+
+		for _, key := range keys {
+			if !bytes.HasPrefix(key, searchPrefix) {
+				continue
+			}
+
+			val, err := k.Get(key)
+			if err != nil {
+				continue // Skip keys that can't be read
+			}
+
+			var ad AttachmentData
+			if err := json.Unmarshal(val, &ad); err != nil {
+				continue // Skip invalid data
+			}
+			matches = append(matches, &ad)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	matches := make([]*AttachmentData, 0, len(keys))
-
-	for _, key := range keys {
-		if !bytes.HasPrefix(key, searchPrefix) {
-			continue
-		}
-
-		val, err := c.kv.Get(key)
-		if err != nil {
-			continue // Skip keys that can't be read
-		}
-
-		var ad AttachmentData
-		if err := json.Unmarshal(val, &ad); err != nil {
-			continue // Skip invalid data
-		}
-		matches = append(matches, &ad)
 	}
 
 	if len(matches) == 0 {
@@ -153,37 +157,39 @@ func (c *Client) ListAttachmentsByNote(noteID uuid.UUID) ([]*models.Attachment, 
 	prefix := []byte(AttachmentPrefix)
 	noteIDStr := noteID.String()
 
-	// Get all keys and filter by prefix
-	keys, err := c.kv.Keys()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, key := range keys {
-		if !bytes.HasPrefix(key, prefix) {
-			continue
-		}
-
-		val, err := c.kv.Get(key)
+	err := c.DoReadOnly(func(k *kv.KV) error {
+		keys, err := k.Keys()
 		if err != nil {
-			continue // Skip keys that can't be read
+			return err
 		}
 
-		var ad AttachmentData
-		if err := json.Unmarshal(val, &ad); err != nil {
-			continue // Skip invalid data
-		}
-
-		if ad.NoteID == noteIDStr {
-			att, err := ad.ToModel()
-			if err != nil {
-				continue // Skip invalid attachments
+		for _, key := range keys {
+			if !bytes.HasPrefix(key, prefix) {
+				continue
 			}
-			attachments = append(attachments, att)
-		}
-	}
 
-	return attachments, nil
+			val, err := k.Get(key)
+			if err != nil {
+				continue // Skip keys that can't be read
+			}
+
+			var ad AttachmentData
+			if err := json.Unmarshal(val, &ad); err != nil {
+				continue // Skip invalid data
+			}
+
+			if ad.NoteID == noteIDStr {
+				att, err := ad.ToModel()
+				if err != nil {
+					continue // Skip invalid attachments
+				}
+				attachments = append(attachments, att)
+			}
+		}
+		return nil
+	})
+
+	return attachments, err
 }
 
 // DeleteAttachment deletes an attachment by ID.

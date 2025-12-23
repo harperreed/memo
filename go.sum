@@ -1,5 +1,5 @@
-github.com/2389-research/charm v0.17.0 h1:YHftkZPnu2o+NwJCIgbD7TnpgmPpRQqRMmfeIbZW3vA=
-github.com/2389-research/charm v0.17.0/go.mod h1:hXtIW7xMslPJ4WBrdNyG6E4JZKFIEfgvGv8OvOKbrgc=
+github.com/2389-research/charm v0.18.0 h1:0TWyoK9EiW4kGt/9NuRJBtUC1p/k2BYP7Z/tS3T29XQ=
+github.com/2389-research/charm v0.18.0/go.mod h1:hXtIW7xMslPJ4WBrdNyG6E4JZKFIEfgvGv8OvOKbrgc=
 github.com/alecthomas/assert/v2 v2.7.0 h1:QtqSACNS3tF7oasA8CU6A6sXZSBDqnm7RfpLl9bZqbE=
 github.com/alecthomas/assert/v2 v2.7.0/go.mod h1:Bze95FyfUr7x34QZrjL+XP+0qgp/zg8yS+TtBj1WA3k=
 github.com/alecthomas/chroma/v2 v2.14.0 h1:R3+wzpnUArGcQz7fCETQBzO5n9IMNi13iIs46aU4V9E=

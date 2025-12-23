@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/charm/kv"
 	"github.com/google/uuid"
 	"github.com/harper/memo/internal/models"
 )
@@ -24,30 +25,35 @@ func (c *Client) ListAllTags() ([]*TagWithCount, error) {
 	tagCounts := make(map[string]int)
 	prefix := []byte(NotePrefix)
 
-	// Get all keys and filter by prefix
-	keys, err := c.kv.Keys()
+	err := c.DoReadOnly(func(k *kv.KV) error {
+		keys, err := k.Keys()
+		if err != nil {
+			return err
+		}
+
+		for _, key := range keys {
+			if !bytes.HasPrefix(key, prefix) {
+				continue
+			}
+
+			val, err := k.Get(key)
+			if err != nil {
+				continue // Skip keys that can't be read
+			}
+
+			var nd NoteData
+			if err := json.Unmarshal(val, &nd); err != nil {
+				continue // Skip invalid data
+			}
+
+			for _, tag := range nd.Tags {
+				tagCounts[strings.ToLower(tag)]++
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	for _, key := range keys {
-		if !bytes.HasPrefix(key, prefix) {
-			continue
-		}
-
-		val, err := c.kv.Get(key)
-		if err != nil {
-			continue // Skip keys that can't be read
-		}
-
-		var nd NoteData
-		if err := json.Unmarshal(val, &nd); err != nil {
-			continue // Skip invalid data
-		}
-
-		for _, tag := range nd.Tags {
-			tagCounts[strings.ToLower(tag)]++
-		}
 	}
 
 	// Convert to TagWithCount slice

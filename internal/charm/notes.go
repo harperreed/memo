@@ -109,30 +109,34 @@ func (c *Client) GetNoteByPrefix(prefix string) (*models.Note, []string, error) 
 	}
 
 	searchPrefix := []byte(NotePrefix + prefix)
+	var matches []*NoteData
 
-	// Get all keys and filter by prefix
-	keys, err := c.kv.Keys()
+	err := c.DoReadOnly(func(k *kv.KV) error {
+		keys, err := k.Keys()
+		if err != nil {
+			return err
+		}
+
+		for _, key := range keys {
+			if !bytes.HasPrefix(key, searchPrefix) {
+				continue
+			}
+
+			val, err := k.Get(key)
+			if err != nil {
+				continue // Skip keys that can't be read
+			}
+
+			var nd NoteData
+			if err := json.Unmarshal(val, &nd); err != nil {
+				continue // Skip invalid data
+			}
+			matches = append(matches, &nd)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, nil, err
-	}
-
-	matches := make([]*NoteData, 0, len(keys))
-
-	for _, key := range keys {
-		if !bytes.HasPrefix(key, searchPrefix) {
-			continue
-		}
-
-		val, err := c.kv.Get(key)
-		if err != nil {
-			continue // Skip keys that can't be read
-		}
-
-		var nd NoteData
-		if err := json.Unmarshal(val, &nd); err != nil {
-			continue // Skip invalid data
-		}
-		matches = append(matches, &nd)
 	}
 
 	if len(matches) == 0 {
@@ -161,36 +165,40 @@ type NoteFilter struct {
 // ListNotes returns notes matching the filter, sorted by updated_at desc.
 func (c *Client) ListNotes(filter *NoteFilter) ([]*models.Note, error) {
 	prefix := []byte(NotePrefix)
+	var notes []*NoteData
 
-	// Get all keys and filter by prefix
-	keys, err := c.kv.Keys()
+	err := c.DoReadOnly(func(k *kv.KV) error {
+		keys, err := k.Keys()
+		if err != nil {
+			return err
+		}
+
+		for _, key := range keys {
+			if !bytes.HasPrefix(key, prefix) {
+				continue
+			}
+
+			val, err := k.Get(key)
+			if err != nil {
+				continue // Skip keys that can't be read
+			}
+
+			var nd NoteData
+			if err := json.Unmarshal(val, &nd); err != nil {
+				continue // Skip invalid data
+			}
+
+			// Apply filters
+			if !matchesFilter(&nd, filter) {
+				continue
+			}
+
+			notes = append(notes, &nd)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	notes := make([]*NoteData, 0, len(keys))
-
-	for _, key := range keys {
-		if !bytes.HasPrefix(key, prefix) {
-			continue
-		}
-
-		val, err := c.kv.Get(key)
-		if err != nil {
-			continue // Skip keys that can't be read
-		}
-
-		var nd NoteData
-		if err := json.Unmarshal(val, &nd); err != nil {
-			continue // Skip invalid data
-		}
-
-		// Apply filters
-		if !matchesFilter(&nd, filter) {
-			continue
-		}
-
-		notes = append(notes, &nd)
 	}
 
 	// Sort by updated_at descending
@@ -315,39 +323,41 @@ func (c *Client) CountGlobalNotes() (int, error) {
 	count := 0
 	prefix := []byte(NotePrefix)
 
-	// Get all keys and filter by prefix
-	keys, err := c.kv.Keys()
-	if err != nil {
-		return 0, err
-	}
-
-	for _, key := range keys {
-		if !bytes.HasPrefix(key, prefix) {
-			continue
-		}
-
-		val, err := c.kv.Get(key)
+	err := c.DoReadOnly(func(k *kv.KV) error {
+		keys, err := k.Keys()
 		if err != nil {
-			continue // Skip keys that can't be read
+			return err
 		}
 
-		var nd NoteData
-		if err := json.Unmarshal(val, &nd); err != nil {
-			continue // Skip invalid data
-		}
+		for _, key := range keys {
+			if !bytes.HasPrefix(key, prefix) {
+				continue
+			}
 
-		// Check if has any dir: tag
-		isGlobal := true
-		for _, tag := range nd.Tags {
-			if strings.HasPrefix(strings.ToLower(tag), "dir:") {
-				isGlobal = false
-				break
+			val, err := k.Get(key)
+			if err != nil {
+				continue // Skip keys that can't be read
+			}
+
+			var nd NoteData
+			if err := json.Unmarshal(val, &nd); err != nil {
+				continue // Skip invalid data
+			}
+
+			// Check if has any dir: tag
+			isGlobal := true
+			for _, tag := range nd.Tags {
+				if strings.HasPrefix(strings.ToLower(tag), "dir:") {
+					isGlobal = false
+					break
+				}
+			}
+			if isGlobal {
+				count++
 			}
 		}
-		if isGlobal {
-			count++
-		}
-	}
+		return nil
+	})
 
-	return count, nil
+	return count, err
 }
