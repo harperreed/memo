@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	charmkv "github.com/charmbracelet/charm/kv"
 	"github.com/fatih/color"
 	"github.com/harper/memo/internal/charm"
 	"github.com/spf13/cobra"
@@ -26,12 +27,16 @@ Commands:
   status  - Show sync configuration and connection status
   link    - Connect this device to Charm cloud
   unlink  - Disconnect from Charm cloud
+  repair  - Repair database corruption issues
+  reset   - Reset local sync data (keeps cloud data)
   wipe    - Delete all synced data and start fresh
 
 Examples:
   memo sync status
   memo sync link
-  memo sync link --host charm.example.com`,
+  memo sync link --host charm.example.com
+  memo sync repair
+  memo sync reset`,
 }
 
 var syncStatusCmd = &cobra.Command{
@@ -179,22 +184,106 @@ You can re-link anytime with 'memo sync link'.`,
 	},
 }
 
+var syncRepairCmd = &cobra.Command{
+	Use:   "repair",
+	Short: "Repair database corruption issues",
+	Long: `Repair the local KV database if it's corrupted.
+
+This command:
+- Checkpoints the WAL (write-ahead log)
+- Removes shared memory files
+- Runs integrity checks
+- Vacuums the database if needed
+
+Use --force to attempt repair even if integrity check fails.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		force, _ := cmd.Flags().GetBool("force")
+
+		fmt.Println("Repairing database...")
+		result, err := charmkv.Repair(charm.DBName, force)
+		if err != nil {
+			return fmt.Errorf("repair failed: %w", err)
+		}
+
+		fmt.Println("\nRepair Results:")
+		if result.WalCheckpointed {
+			fmt.Println("  ✓ WAL checkpointed")
+		}
+		if result.ShmRemoved {
+			fmt.Println("  ✓ SHM file removed")
+		}
+		if result.IntegrityOK {
+			color.Green("  ✓ Integrity check passed")
+		} else {
+			color.Red("  ✗ Integrity check failed")
+		}
+		if result.Vacuumed {
+			fmt.Println("  ✓ Database vacuumed")
+		}
+
+		if result.IntegrityOK {
+			color.Green("\n✓ Database repaired successfully")
+		} else {
+			color.Yellow("\n⚠ Repair completed but integrity issues remain")
+			fmt.Println("Consider running 'memo sync reset' or 'memo sync wipe'")
+		}
+
+		return nil
+	},
+}
+
+var syncResetCmd = &cobra.Command{
+	Use:   "reset",
+	Short: "Reset local sync data",
+	Long: `Reset the local KV database while keeping cloud data intact.
+
+This removes all local sync state and forces a fresh sync from the cloud.
+Use this when:
+- Local database is corrupted
+- You want to re-sync from cloud
+- Sync state has diverged
+
+Your cloud data is preserved.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Confirm with user
+		fmt.Println("This will reset local sync data.")
+		fmt.Println("Cloud data will be preserved and re-synced.")
+		fmt.Print("\nContinue? [y/N]: ")
+
+		reader := bufio.NewReader(os.Stdin)
+		confirmation, _ := reader.ReadString('\n')
+		confirmation = strings.TrimSpace(strings.ToLower(confirmation))
+
+		if confirmation != "y" && confirmation != "yes" {
+			fmt.Println("Aborted.")
+			return nil
+		}
+
+		fmt.Println("\nResetting local data...")
+
+		if err := charmkv.Reset(charm.DBName); err != nil {
+			return fmt.Errorf("reset failed: %w", err)
+		}
+
+		color.Green("✓ Local sync data reset")
+		fmt.Println("\nRun any memo command to re-sync from cloud.")
+
+		return nil
+	},
+}
+
 var syncWipeCmd = &cobra.Command{
 	Use:   "wipe",
 	Short: "Wipe all sync data and start fresh",
 	Long: `Delete all synced data from Charm cloud and local KV store.
 
 This is the nuclear option - use when:
-- Sync data is corrupted
+- Sync data is corrupted beyond repair
 - You want to start completely fresh
 - You're cleaning up after development/testing
 
-After wipe, your local notes will be re-synced on next operation.`,
+This deletes BOTH cloud backups and local files.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if charmClient == nil {
-			return fmt.Errorf("not connected to Charm - run 'memo sync link' first")
-		}
-
 		// Confirm with user
 		fmt.Println("This will DELETE all sync data:")
 		fmt.Println("  - All notes in Charm cloud")
@@ -214,11 +303,20 @@ After wipe, your local notes will be re-synced on next operation.`,
 
 		fmt.Println("\nWiping data...")
 
-		if err := charmClient.Reset(); err != nil {
+		result, err := charmkv.Wipe(charm.DBName)
+		if err != nil {
 			return fmt.Errorf("wipe failed: %w", err)
 		}
 
-		color.Green("✓ All sync data wiped")
+		fmt.Println("\nWipe Results:")
+		if result.CloudBackupsDeleted > 0 {
+			fmt.Printf("  ✓ Deleted %d cloud backups\n", result.CloudBackupsDeleted)
+		}
+		if result.LocalFilesDeleted > 0 {
+			fmt.Printf("  ✓ Deleted %d local files\n", result.LocalFilesDeleted)
+		}
+
+		color.Green("\n✓ All sync data wiped")
 		fmt.Println("\nRun any memo command to start fresh.")
 
 		return nil
@@ -227,10 +325,13 @@ After wipe, your local notes will be re-synced on next operation.`,
 
 func init() {
 	syncLinkCmd.Flags().String("host", "", "Charm server host (default: cloud.charm.sh)")
+	syncRepairCmd.Flags().Bool("force", false, "Force repair even if integrity check fails")
 
 	syncCmd.AddCommand(syncStatusCmd)
 	syncCmd.AddCommand(syncLinkCmd)
 	syncCmd.AddCommand(syncUnlinkCmd)
+	syncCmd.AddCommand(syncRepairCmd)
+	syncCmd.AddCommand(syncResetCmd)
 	syncCmd.AddCommand(syncWipeCmd)
 
 	rootCmd.AddCommand(syncCmd)
