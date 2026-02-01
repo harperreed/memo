@@ -24,7 +24,7 @@ var attachCmd = &cobra.Command{
 		prefix := args[0]
 		filePath := args[1]
 
-		note, _, err := charmClient.GetNoteByPrefix(prefix)
+		note, _, err := store.GetNoteByPrefix(prefix)
 		if err != nil {
 			return fmt.Errorf("failed to get note: %w", err)
 		}
@@ -41,7 +41,7 @@ var attachCmd = &cobra.Command{
 		}
 
 		att := models.NewAttachment(note.ID, filename, mimeType, data)
-		if err := charmClient.CreateAttachment(att); err != nil {
+		if err := store.CreateAttachment(att); err != nil {
 			return fmt.Errorf("failed to create attachment: %w", err)
 		}
 
@@ -58,7 +58,7 @@ var attachGetCmd = &cobra.Command{
 		prefix := args[0]
 		outputPath, _ := cmd.Flags().GetString("output")
 
-		att, err := charmClient.GetAttachmentByPrefix(prefix)
+		att, err := store.GetAttachmentByPrefix(prefix)
 		if err != nil {
 			return fmt.Errorf("failed to get attachment: %w", err)
 		}

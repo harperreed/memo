@@ -54,7 +54,7 @@ var addCmd = &cobra.Command{
 		allTags := collectTags(tagsFlag, hereFlag)
 
 		note := models.NewNote(title, content)
-		if err := charmClient.CreateNote(note, allTags); err != nil {
+		if err := store.CreateNote(note, allTags); err != nil {
 			return fmt.Errorf("failed to create note: %w", err)
 		}
 

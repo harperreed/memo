@@ -13,7 +13,7 @@ var mcpCmd = &cobra.Command{
 	Short: "Start MCP server",
 	Long:  `Start the Model Context Protocol server for AI agent integration.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		server := mcp.NewServer(charmClient)
+		server := mcp.NewServer(store)
 		return server.Serve(cmd.Context())
 	},
 }

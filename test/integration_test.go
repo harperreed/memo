@@ -1,5 +1,5 @@
 // ABOUTME: Integration tests for memo CLI commands.
-// ABOUTME: Tests require a running Charm server or CHARM_DATA_DIR to be set.
+// ABOUTME: Tests use a temporary database directory for isolation.
 
 package test
 
@@ -12,6 +12,7 @@ import (
 )
 
 var memoBin string
+var testDataDir string
 
 func TestMain(m *testing.M) {
 	// Build memo binary
@@ -24,22 +25,25 @@ func TestMain(m *testing.M) {
 	wd, _ := os.Getwd()
 	memoBin = filepath.Join(wd, "..", "bin", "memo")
 
-	os.Exit(m.Run())
-}
-
-// skipIfNoCharm skips the test if Charm is not configured for testing.
-func skipIfNoCharm(t *testing.T) {
-	t.Helper()
-	// Tests require CHARM_DATA_DIR to be set to a temp directory
-	// or a running charm server. For CI, use the testserver package.
-	if os.Getenv("CHARM_DATA_DIR") == "" && os.Getenv("CHARM_HOST") == "" {
-		t.Skip("Skipping: set CHARM_DATA_DIR or CHARM_HOST for integration tests")
+	// Create temp directory for test data
+	var err error
+	testDataDir, err = os.MkdirTemp("", "memo-integration-test-*")
+	if err != nil {
+		panic(err)
 	}
+
+	// Set XDG_DATA_HOME to use temp directory
+	os.Setenv("XDG_DATA_HOME", testDataDir)
+
+	code := m.Run()
+
+	// Cleanup
+	os.RemoveAll(testDataDir)
+
+	os.Exit(code)
 }
 
 func TestAddListShowDelete(t *testing.T) {
-	skipIfNoCharm(t)
-
 	// Add a note
 	out, err := runMemo("add", "Test Note", "--content", "Test content here")
 	if err != nil {
@@ -95,8 +99,6 @@ func TestAddListShowDelete(t *testing.T) {
 }
 
 func TestTagOperations(t *testing.T) {
-	skipIfNoCharm(t)
-
 	// Add note with tags
 	_, _ = runMemo("add", "Tagged Note", "--content", "Content", "--tags", "work,urgent")
 
@@ -114,8 +116,6 @@ func TestTagOperations(t *testing.T) {
 }
 
 func TestSearch(t *testing.T) {
-	skipIfNoCharm(t)
-
 	_, _ = runMemo("add", "Go Programming", "--content", "Learn about goroutines")
 	_, _ = runMemo("add", "Cooking", "--content", "How to make pasta")
 
@@ -125,6 +125,34 @@ func TestSearch(t *testing.T) {
 	}
 	if strings.Contains(out, "Cooking") {
 		t.Errorf("did not expect 'Cooking' in search: %s", out)
+	}
+}
+
+func TestExportImport(t *testing.T) {
+	// Add a note
+	_, _ = runMemo("add", "Export Test", "--content", "Content for export", "--tags", "export")
+
+	// Export to JSON
+	exportPath := filepath.Join(testDataDir, "export.json")
+	out, err := runMemo("export", "--format", "json", "-o", exportPath)
+	if err != nil {
+		t.Fatalf("export failed: %v\n%s", err, out)
+	}
+
+	// Check export file exists
+	if _, err := os.Stat(exportPath); os.IsNotExist(err) {
+		t.Error("export file was not created")
+	}
+
+	// Export to YAML
+	yamlPath := filepath.Join(testDataDir, "export.yaml")
+	out, err = runMemo("export", "--format", "yaml", "-o", yamlPath)
+	if err != nil {
+		t.Fatalf("yaml export failed: %v\n%s", err, out)
+	}
+
+	if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
+		t.Error("yaml export file was not created")
 	}
 }
 

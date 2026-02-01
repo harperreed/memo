@@ -38,9 +38,9 @@ func (s *Server) handleReadResource(ctx context.Context, req *mcp.ReadResourceRe
 	var note *models.Note
 	var tags []string
 	if noteID, parseErr := uuid.Parse(noteIDStr); parseErr == nil {
-		note, tags, err = s.client.GetNoteByID(noteID)
+		note, tags, err = s.store.GetNoteByID(noteID)
 	} else {
-		note, tags, err = s.client.GetNoteByPrefix(noteIDStr)
+		note, tags, err = s.store.GetNoteByPrefix(noteIDStr)
 	}
 
 	if err != nil {

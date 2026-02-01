@@ -22,7 +22,7 @@ var rmCmd = &cobra.Command{
 		prefix := args[0]
 		force, _ := cmd.Flags().GetBool("force")
 
-		note, _, err := charmClient.GetNoteByPrefix(prefix)
+		note, _, err := store.GetNoteByPrefix(prefix)
 		if err != nil {
 			return fmt.Errorf("failed to get note: %w", err)
 		}
@@ -42,7 +42,7 @@ var rmCmd = &cobra.Command{
 		}
 
 		// DeleteNote handles cascade deletion of attachments
-		if err := charmClient.DeleteNote(note.ID); err != nil {
+		if err := store.DeleteNote(note.ID); err != nil {
 			return fmt.Errorf("failed to delete note: %w", err)
 		}
 

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/harper/memo/internal/charm"
 	"github.com/harper/memo/internal/models"
+	"github.com/harper/memo/internal/storage"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -209,7 +209,7 @@ func (s *Server) handleAddNote(ctx context.Context, req *mcp.CallToolRequest) (*
 	}
 
 	note := models.NewNote(params.Title, params.Content)
-	if err := s.client.CreateNote(note, params.Tags); err != nil {
+	if err := s.store.CreateNote(note, params.Tags); err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("failed to create note: %v", err)},
@@ -235,11 +235,11 @@ func (s *Server) handleListNotes(ctx context.Context, req *mcp.CallToolRequest) 
 		return nil, err
 	}
 
-	filter := &charm.NoteFilter{
+	filter := &storage.NoteFilter{
 		Tag:   params.Tag,
 		Limit: params.Limit,
 	}
-	notes, err := s.client.ListNotes(filter)
+	notes, err := s.store.ListNotes(filter)
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -278,10 +278,10 @@ func (s *Server) handleGetNote(ctx context.Context, req *mcp.CallToolRequest) (*
 
 	// Try parsing as UUID first
 	if id, parseErr := uuid.Parse(params.ID); parseErr == nil {
-		note, _, err = s.client.GetNoteByID(id)
+		note, _, err = s.store.GetNoteByID(id)
 	} else {
 		// Try as prefix
-		note, _, err = s.client.GetNoteByPrefix(params.ID)
+		note, _, err = s.store.GetNoteByPrefix(params.ID)
 	}
 
 	if err != nil {
@@ -324,9 +324,9 @@ func (s *Server) handleUpdateNote(ctx context.Context, req *mcp.CallToolRequest)
 	var tags []string
 	var err error
 	if id, parseErr := uuid.Parse(params.ID); parseErr == nil {
-		note, tags, err = s.client.GetNoteByID(id)
+		note, tags, err = s.store.GetNoteByID(id)
 	} else {
-		note, tags, err = s.client.GetNoteByPrefix(params.ID)
+		note, tags, err = s.store.GetNoteByPrefix(params.ID)
 	}
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -354,7 +354,7 @@ func (s *Server) handleUpdateNote(ctx context.Context, req *mcp.CallToolRequest)
 	}
 	note.UpdatedAt = time.Now()
 
-	if err := s.client.UpdateNote(note, tags); err != nil {
+	if err := s.store.UpdateNote(note, tags); err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("failed to update note: %v", err)},
@@ -384,7 +384,7 @@ func (s *Server) handleDeleteNote(ctx context.Context, req *mcp.CallToolRequest)
 		id = parsedID
 	} else {
 		// Get by prefix first
-		note, _, err := s.client.GetNoteByPrefix(params.ID)
+		note, _, err := s.store.GetNoteByPrefix(params.ID)
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
@@ -396,7 +396,7 @@ func (s *Server) handleDeleteNote(ctx context.Context, req *mcp.CallToolRequest)
 		id = note.ID
 	}
 
-	if err = s.client.DeleteNote(id); err != nil {
+	if err = s.store.DeleteNote(id); err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("failed to delete note: %v", err)},
@@ -422,11 +422,11 @@ func (s *Server) handleSearchNotes(ctx context.Context, req *mcp.CallToolRequest
 		return nil, err
 	}
 
-	filter := &charm.NoteFilter{
+	filter := &storage.NoteFilter{
 		Search: params.Query,
 		Limit:  params.Limit,
 	}
-	notes, err := s.client.ListNotes(filter)
+	notes, err := s.store.ListNotes(filter)
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -465,7 +465,7 @@ func (s *Server) handleAddTag(ctx context.Context, req *mcp.CallToolRequest) (*m
 	if parsedID, parseErr := uuid.Parse(params.ID); parseErr == nil {
 		id = parsedID
 	} else {
-		note, _, err := s.client.GetNoteByPrefix(params.ID)
+		note, _, err := s.store.GetNoteByPrefix(params.ID)
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
@@ -477,7 +477,7 @@ func (s *Server) handleAddTag(ctx context.Context, req *mcp.CallToolRequest) (*m
 		id = note.ID
 	}
 
-	if err := s.client.AddTagToNote(id, params.Tag); err != nil {
+	if err := s.store.AddTagToNote(id, params.Tag); err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("failed to add tag: %v", err)},
@@ -506,7 +506,7 @@ func (s *Server) handleRemoveTag(ctx context.Context, req *mcp.CallToolRequest) 
 	if parsedID, parseErr := uuid.Parse(params.ID); parseErr == nil {
 		id = parsedID
 	} else {
-		note, _, err := s.client.GetNoteByPrefix(params.ID)
+		note, _, err := s.store.GetNoteByPrefix(params.ID)
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
@@ -518,7 +518,7 @@ func (s *Server) handleRemoveTag(ctx context.Context, req *mcp.CallToolRequest) 
 		id = note.ID
 	}
 
-	if err := s.client.RemoveTagFromNote(id, params.Tag); err != nil {
+	if err := s.store.RemoveTagFromNote(id, params.Tag); err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("failed to remove tag: %v", err)},
@@ -549,7 +549,7 @@ func (s *Server) handleAddAttachment(ctx context.Context, req *mcp.CallToolReque
 	if parsedID, parseErr := uuid.Parse(params.ID); parseErr == nil {
 		noteID = parsedID
 	} else {
-		note, _, err := s.client.GetNoteByPrefix(params.ID)
+		note, _, err := s.store.GetNoteByPrefix(params.ID)
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
@@ -573,7 +573,7 @@ func (s *Server) handleAddAttachment(ctx context.Context, req *mcp.CallToolReque
 	}
 
 	attachment := models.NewAttachment(noteID, params.Filename, params.MimeType, data)
-	if err := s.client.CreateAttachment(attachment); err != nil {
+	if err := s.store.CreateAttachment(attachment); err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("failed to create attachment: %v", err)},
@@ -601,7 +601,7 @@ func (s *Server) handleListAttachments(ctx context.Context, req *mcp.CallToolReq
 	if parsedID, parseErr := uuid.Parse(params.ID); parseErr == nil {
 		noteID = parsedID
 	} else {
-		note, _, err := s.client.GetNoteByPrefix(params.ID)
+		note, _, err := s.store.GetNoteByPrefix(params.ID)
 		if err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
@@ -613,7 +613,7 @@ func (s *Server) handleListAttachments(ctx context.Context, req *mcp.CallToolReq
 		noteID = note.ID
 	}
 
-	attachments, err := s.client.ListAttachmentsByNote(noteID)
+	attachments, err := s.store.ListAttachmentsByNote(noteID)
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -669,9 +669,9 @@ func (s *Server) handleGetAttachment(ctx context.Context, req *mcp.CallToolReque
 	var attachment *models.Attachment
 	var err error
 	if id, parseErr := uuid.Parse(params.ID); parseErr == nil {
-		attachment, err = s.client.GetAttachmentByID(id)
+		attachment, err = s.store.GetAttachmentByID(id)
 	} else {
-		attachment, err = s.client.GetAttachmentByPrefix(params.ID)
+		attachment, err = s.store.GetAttachmentByPrefix(params.ID)
 	}
 
 	if err != nil {
@@ -724,9 +724,9 @@ func (s *Server) handleExportNote(ctx context.Context, req *mcp.CallToolRequest)
 	var tags []string
 	var err error
 	if id, parseErr := uuid.Parse(params.ID); parseErr == nil {
-		note, tags, err = s.client.GetNoteByID(id)
+		note, tags, err = s.store.GetNoteByID(id)
 	} else {
-		note, tags, err = s.client.GetNoteByPrefix(params.ID)
+		note, tags, err = s.store.GetNoteByPrefix(params.ID)
 	}
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -738,7 +738,7 @@ func (s *Server) handleExportNote(ctx context.Context, req *mcp.CallToolRequest)
 	}
 
 	// Get attachments
-	attachments, _ := s.client.ListAttachmentsByNote(note.ID)
+	attachments, _ := s.store.ListAttachmentsByNote(note.ID)
 
 	if params.Format == "md" {
 		// Export as markdown

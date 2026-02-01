@@ -6,17 +6,17 @@ package mcp
 import (
 	"context"
 
-	"github.com/harper/memo/internal/charm"
+	"github.com/harper/memo/internal/storage"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type Server struct {
 	server *mcp.Server
-	client *charm.Client
+	store  *storage.Store
 }
 
-func NewServer(client *charm.Client) *Server {
-	s := &Server{client: client}
+func NewServer(store *storage.Store) *Server {
+	s := &Server{store: store}
 
 	s.server = mcp.NewServer(
 		&mcp.Implementation{

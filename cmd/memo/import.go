@@ -1,5 +1,5 @@
 // ABOUTME: Import command for restoring notes from backup.
-// ABOUTME: Supports JSON and markdown directory import.
+// ABOUTME: Supports JSON, YAML, and markdown directory import.
 
 package main
 
@@ -21,7 +21,7 @@ import (
 var importCmd = &cobra.Command{
 	Use:   "import <path>",
 	Short: "Import notes",
-	Long:  `Import notes from a JSON file or directory of markdown files.`,
+	Long:  `Import notes from a JSON file, YAML file, or directory of markdown files.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := args[0]
@@ -39,6 +39,10 @@ var importCmd = &cobra.Command{
 			return importJSON(path)
 		}
 
+		if strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml") {
+			return importYAML(path)
+		}
+
 		return importMarkdownFile(path)
 	},
 }
@@ -54,6 +58,24 @@ func importJSON(path string) error {
 		return err
 	}
 
+	return importExportData(&export)
+}
+
+func importYAML(path string) error {
+	data, err := os.ReadFile(path) //nolint:gosec // User-specified file path is expected CLI behavior
+	if err != nil {
+		return err
+	}
+
+	var export ExportData
+	if err := yaml.Unmarshal(data, &export); err != nil {
+		return err
+	}
+
+	return importExportData(&export)
+}
+
+func importExportData(export *ExportData) error {
 	count := 0
 	for _, en := range export.Notes {
 		note := models.NewNote(en.Title, en.Content)
@@ -64,7 +86,7 @@ func importJSON(path string) error {
 		note.CreatedAt = en.CreatedAt
 		note.UpdatedAt = en.UpdatedAt
 
-		if err := charmClient.CreateNote(note, en.Tags); err != nil {
+		if err := store.CreateNote(note, en.Tags); err != nil {
 			fmt.Printf("Warning: failed to import %q: %v\n", en.Title, err)
 			continue
 		}
@@ -75,7 +97,7 @@ func importJSON(path string) error {
 			if id, err := uuid.Parse(att.ID); err == nil {
 				attachment.ID = id
 			}
-			if err := charmClient.CreateAttachment(attachment); err != nil {
+			if err := store.CreateAttachment(attachment); err != nil {
 				fmt.Printf("Warning: failed to create attachment %q: %v\n", att.Filename, err)
 			}
 		}
@@ -150,7 +172,7 @@ func importMarkdownFile(path string) error {
 	}
 
 	note := models.NewNote(title, content)
-	if err := charmClient.CreateNote(note, tags); err != nil {
+	if err := store.CreateNote(note, tags); err != nil {
 		return err
 	}
 

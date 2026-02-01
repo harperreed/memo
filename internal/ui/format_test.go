@@ -70,8 +70,8 @@ func TestFormatDirSectionHeader(t *testing.T) {
 	if !strings.Contains(output, dirPath) {
 		t.Errorf("expected output to contain dir path %q", dirPath)
 	}
-	if !strings.Contains(output, "📁") {
-		t.Error("expected output to contain folder emoji")
+	if !strings.Contains(output, "[D]") {
+		t.Error("expected output to contain directory marker [D]")
 	}
 }
 
@@ -81,8 +81,8 @@ func TestFormatGlobalSectionHeader(t *testing.T) {
 	if !strings.Contains(output, "Global") {
 		t.Error("expected output to contain 'Global'")
 	}
-	if !strings.Contains(output, "🌐") {
-		t.Error("expected output to contain globe emoji")
+	if !strings.Contains(output, "[G]") {
+		t.Error("expected output to contain global marker [G]")
 	}
 }
 
@@ -97,5 +97,47 @@ func TestFormatShowMorePrompt(t *testing.T) {
 	}
 	if !strings.Contains(output, "y/n") {
 		t.Error("expected output to contain 'y/n'")
+	}
+}
+
+func TestTerminalRendererHeading(t *testing.T) {
+	content := "# Heading One\n\n## Heading Two"
+	output, err := FormatNoteContent(content)
+	if err != nil {
+		t.Fatalf("failed to format content: %v", err)
+	}
+
+	if !strings.Contains(output, "# ") {
+		t.Error("expected output to contain heading marker")
+	}
+	if !strings.Contains(output, "## ") {
+		t.Error("expected output to contain second level heading marker")
+	}
+}
+
+func TestTerminalRendererCodeBlock(t *testing.T) {
+	content := "```go\nfunc main() {}\n```"
+	output, err := FormatNoteContent(content)
+	if err != nil {
+		t.Fatalf("failed to format content: %v", err)
+	}
+
+	if !strings.Contains(output, "```go") {
+		t.Error("expected output to contain code block language marker")
+	}
+	if !strings.Contains(output, "func main()") {
+		t.Error("expected output to contain code content")
+	}
+}
+
+func TestTerminalRendererList(t *testing.T) {
+	content := "- Item one\n- Item two"
+	output, err := FormatNoteContent(content)
+	if err != nil {
+		t.Fatalf("failed to format content: %v", err)
+	}
+
+	if !strings.Contains(output, "- Item one") {
+		t.Error("expected output to contain list item")
 	}
 }

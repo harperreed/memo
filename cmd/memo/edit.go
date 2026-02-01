@@ -18,7 +18,7 @@ var editCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		prefix := args[0]
 
-		note, tags, err := charmClient.GetNoteByPrefix(prefix)
+		note, tags, err := store.GetNoteByPrefix(prefix)
 		if err != nil {
 			return fmt.Errorf("failed to get note: %w", err)
 		}
@@ -36,7 +36,7 @@ var editCmd = &cobra.Command{
 		note.Content = newContent
 		note.Touch()
 
-		if err := charmClient.UpdateNote(note, tags); err != nil {
+		if err := store.UpdateNote(note, tags); err != nil {
 			return fmt.Errorf("failed to update note: %w", err)
 		}
 

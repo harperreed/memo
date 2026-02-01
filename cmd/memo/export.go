@@ -1,5 +1,5 @@
 // ABOUTME: Export command for backing up notes.
-// ABOUTME: Supports JSON and markdown export formats.
+// ABOUTME: Supports JSON, YAML, and markdown export formats.
 
 package main
 
@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/harper/memo/internal/charm"
 	"github.com/harper/memo/internal/models"
+	"github.com/harper/memo/internal/storage"
 	"github.com/harper/memo/internal/ui"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -26,26 +26,27 @@ type ExportNote struct {
 	Tags        []string           `json:"tags" yaml:"tags"`
 	CreatedAt   time.Time          `json:"created_at" yaml:"created"`
 	UpdatedAt   time.Time          `json:"updated_at" yaml:"updated"`
-	Attachments []ExportAttachment `json:"attachments,omitempty" yaml:"-"`
+	Attachments []ExportAttachment `json:"attachments,omitempty" yaml:"attachments,omitempty"`
 }
 
 type ExportAttachment struct {
-	ID       string `json:"id"`
-	Filename string `json:"filename"`
-	MimeType string `json:"mime_type"`
-	Data     string `json:"data"` // base64 encoded
+	ID       string `json:"id" yaml:"id"`
+	Filename string `json:"filename" yaml:"filename"`
+	MimeType string `json:"mime_type" yaml:"mime_type"`
+	Data     string `json:"data" yaml:"data"` // base64 encoded
 }
 
 type ExportData struct {
-	ExportedAt time.Time    `json:"exported_at"`
-	Version    string       `json:"version"`
-	Notes      []ExportNote `json:"notes"`
+	Version    string       `json:"version" yaml:"version"`
+	ExportedAt time.Time    `json:"exported_at" yaml:"exported_at"`
+	Tool       string       `json:"tool" yaml:"tool"`
+	Notes      []ExportNote `json:"notes" yaml:"notes"`
 }
 
 var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export notes",
-	Long:  `Export notes to JSON or markdown format.`,
+	Long:  `Export notes to JSON, YAML, or markdown format.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("format")
 		outputPath, _ := cmd.Flags().GetString("output")
@@ -55,20 +56,20 @@ var exportCmd = &cobra.Command{
 		var noteTags [][]string
 
 		if notePrefix != "" {
-			note, tags, err := charmClient.GetNoteByPrefix(notePrefix)
+			note, tags, err := store.GetNoteByPrefix(notePrefix)
 			if err != nil {
 				return fmt.Errorf("failed to get note: %w", err)
 			}
 			notes = append(notes, note)
 			noteTags = append(noteTags, tags)
 		} else {
-			filter := &charm.NoteFilter{Limit: 10000}
-			allNotes, err := charmClient.ListNotes(filter)
+			filter := &storage.NoteFilter{Limit: 10000}
+			allNotes, err := store.ListNotes(filter)
 			if err != nil {
 				return fmt.Errorf("failed to list notes: %w", err)
 			}
 			for _, n := range allNotes {
-				tags, _ := charmClient.GetNoteTags(n.ID)
+				tags, _ := store.GetNoteTags(n.ID)
 				notes = append(notes, n)
 				noteTags = append(noteTags, tags)
 			}
@@ -77,6 +78,8 @@ var exportCmd = &cobra.Command{
 		switch format {
 		case "json":
 			return exportJSON(notes, noteTags, outputPath)
+		case "yaml":
+			return exportYAML(notes, noteTags, outputPath)
 		case "md":
 			return exportMarkdown(notes, noteTags, outputPath)
 		default:
@@ -87,12 +90,13 @@ var exportCmd = &cobra.Command{
 
 func exportJSON(notes []*models.Note, noteTags [][]string, outputPath string) error {
 	export := ExportData{
-		ExportedAt: time.Now(),
 		Version:    "1.0",
+		ExportedAt: time.Now(),
+		Tool:       "memo",
 	}
 
 	for i, n := range notes {
-		attachments, _ := charmClient.ListAttachmentsByNote(n.ID)
+		attachments, _ := store.ListAttachmentsByNote(n.ID)
 
 		en := ExportNote{
 			ID:        n.ID.String(),
@@ -128,6 +132,50 @@ func exportJSON(notes []*models.Note, noteTags [][]string, outputPath string) er
 	return os.WriteFile(outputPath, data, 0600)
 }
 
+func exportYAML(notes []*models.Note, noteTags [][]string, outputPath string) error {
+	export := ExportData{
+		Version:    "1.0",
+		ExportedAt: time.Now(),
+		Tool:       "memo",
+	}
+
+	for i, n := range notes {
+		attachments, _ := store.ListAttachmentsByNote(n.ID)
+
+		en := ExportNote{
+			ID:        n.ID.String(),
+			Title:     n.Title,
+			Content:   n.Content,
+			Tags:      noteTags[i],
+			CreatedAt: n.CreatedAt,
+			UpdatedAt: n.UpdatedAt,
+		}
+
+		for _, att := range attachments {
+			en.Attachments = append(en.Attachments, ExportAttachment{
+				ID:       att.ID.String(),
+				Filename: att.Filename,
+				MimeType: att.MimeType,
+				Data:     base64.StdEncoding.EncodeToString(att.Data),
+			})
+		}
+
+		export.Notes = append(export.Notes, en)
+	}
+
+	data, err := yaml.Marshal(export)
+	if err != nil {
+		return err
+	}
+
+	if outputPath == "" || outputPath == "-" {
+		fmt.Println(string(data))
+		return nil
+	}
+
+	return os.WriteFile(outputPath, data, 0600)
+}
+
 func exportMarkdown(notes []*models.Note, noteTags [][]string, outputDir string) error {
 	if outputDir == "" {
 		outputDir = "export"
@@ -138,7 +186,7 @@ func exportMarkdown(notes []*models.Note, noteTags [][]string, outputDir string)
 	}
 
 	for i, n := range notes {
-		attachments, _ := charmClient.ListAttachmentsByNote(n.ID)
+		attachments, _ := store.ListAttachmentsByNote(n.ID)
 
 		en := ExportNote{
 			ID:        n.ID.String(),
@@ -197,7 +245,7 @@ func sanitizeFilename(name string) string {
 }
 
 func init() {
-	exportCmd.Flags().StringP("format", "f", "json", "export format (json|md)")
+	exportCmd.Flags().StringP("format", "f", "json", "export format (json|yaml|md)")
 	exportCmd.Flags().StringP("output", "o", "", "output path")
 	exportCmd.Flags().StringP("note", "n", "", "single note ID to export")
 	rootCmd.AddCommand(exportCmd)

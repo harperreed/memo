@@ -24,12 +24,12 @@ var tagAddCmd = &cobra.Command{
 		prefix := args[0]
 		tagName := args[1]
 
-		note, _, err := charmClient.GetNoteByPrefix(prefix)
+		note, _, err := store.GetNoteByPrefix(prefix)
 		if err != nil {
 			return fmt.Errorf("failed to get note: %w", err)
 		}
 
-		if err := charmClient.AddTagToNote(note.ID, tagName); err != nil {
+		if err := store.AddTagToNote(note.ID, tagName); err != nil {
 			return fmt.Errorf("failed to add tag: %w", err)
 		}
 
@@ -46,12 +46,12 @@ var tagRmCmd = &cobra.Command{
 		prefix := args[0]
 		tagName := args[1]
 
-		note, _, err := charmClient.GetNoteByPrefix(prefix)
+		note, _, err := store.GetNoteByPrefix(prefix)
 		if err != nil {
 			return fmt.Errorf("failed to get note: %w", err)
 		}
 
-		if err := charmClient.RemoveTagFromNote(note.ID, tagName); err != nil {
+		if err := store.RemoveTagFromNote(note.ID, tagName); err != nil {
 			return fmt.Errorf("failed to remove tag: %w", err)
 		}
 
@@ -64,7 +64,7 @@ var tagListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all tags",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		tags, err := charmClient.ListAllTags()
+		tags, err := store.ListAllTags()
 		if err != nil {
 			return fmt.Errorf("failed to list tags: %w", err)
 		}

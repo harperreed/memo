@@ -1,5 +1,5 @@
 // ABOUTME: Show command for displaying a single note.
-// ABOUTME: Renders markdown content with glamour.
+// ABOUTME: Renders markdown content with goldmark.
 
 package main
 
@@ -19,12 +19,12 @@ var showCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		prefix := args[0]
 
-		note, tags, err := charmClient.GetNoteByPrefix(prefix)
+		note, tags, err := store.GetNoteByPrefix(prefix)
 		if err != nil {
 			return fmt.Errorf("failed to get note: %w", err)
 		}
 
-		attachments, _ := charmClient.ListAttachmentsByNote(note.ID)
+		attachments, _ := store.ListAttachmentsByNote(note.ID)
 
 		// Print header
 		fmt.Print(ui.FormatNoteHeader(note, tagsToModelsList(tags)))
