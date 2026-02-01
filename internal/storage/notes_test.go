@@ -344,3 +344,236 @@ func TestTagNormalization(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateNonExistentNote(t *testing.T) {
+	store := newTestStore(t)
+
+	// Try to update a note that doesn't exist
+	note := models.NewNote("Non-existent", "This note doesn't exist")
+	err := store.UpdateNote(note, nil)
+	if !errors.Is(err, ErrNoteNotFound) {
+		t.Errorf("expected ErrNoteNotFound, got %v", err)
+	}
+}
+
+func TestDeleteNonExistentNote(t *testing.T) {
+	store := newTestStore(t)
+
+	// Try to delete a note that doesn't exist
+	err := store.DeleteNote(uuid.New())
+	if !errors.Is(err, ErrNoteNotFound) {
+		t.Errorf("expected ErrNoteNotFound, got %v", err)
+	}
+}
+
+func TestListNotesNilFilter(t *testing.T) {
+	store := newTestStore(t)
+
+	// Create a note
+	note := models.NewNote("Test Note", "Content")
+	_ = store.CreateNote(note, nil)
+
+	// List with nil filter
+	notes, err := store.ListNotes(nil)
+	if err != nil {
+		t.Fatalf("failed to list notes with nil filter: %v", err)
+	}
+
+	if len(notes) != 1 {
+		t.Errorf("expected 1 note, got %d", len(notes))
+	}
+}
+
+func TestCreateNoteWithEmptyTags(t *testing.T) {
+	store := newTestStore(t)
+
+	note := models.NewNote("No Tags", "Content without tags")
+	tags := []string{"", "   ", "valid"}
+	_ = store.CreateNote(note, tags)
+
+	retrievedTags, err := store.GetNoteTags(note.ID)
+	if err != nil {
+		t.Fatalf("failed to get note tags: %v", err)
+	}
+
+	// Only "valid" should be stored
+	if len(retrievedTags) != 1 {
+		t.Errorf("expected 1 tag (empty filtered), got %d", len(retrievedTags))
+	}
+}
+
+func TestSearchNotesWithLimit(t *testing.T) {
+	store := newTestStore(t)
+
+	// Create multiple notes with same search term
+	for i := 0; i < 5; i++ {
+		note := models.NewNote("Searchable", "Contains the word apple")
+		_ = store.CreateNote(note, nil)
+	}
+
+	// Search with limit
+	notes, err := store.ListNotes(&NoteFilter{Search: "apple", Limit: 3})
+	if err != nil {
+		t.Fatalf("failed to search notes: %v", err)
+	}
+
+	if len(notes) != 3 {
+		t.Errorf("expected 3 notes (limited), got %d", len(notes))
+	}
+}
+
+func TestGetNoteByPrefixNotFound(t *testing.T) {
+	store := newTestStore(t)
+
+	// Create a note
+	note := models.NewNote("Test Note", "Content")
+	_ = store.CreateNote(note, nil)
+
+	// Search for a prefix that doesn't exist
+	_, _, err := store.GetNoteByPrefix("000000")
+	if !errors.Is(err, ErrNoteNotFound) {
+		t.Errorf("expected ErrNoteNotFound, got %v", err)
+	}
+}
+
+func TestListNotesWithTagAndDirTag(t *testing.T) {
+	store := newTestStore(t)
+
+	// Create notes with both regular and dir tags
+	note1 := models.NewNote("Note 1", "Content 1")
+	_ = store.CreateNote(note1, []string{"tag1", "dir:/path/to/dir"})
+
+	note2 := models.NewNote("Note 2", "Content 2")
+	_ = store.CreateNote(note2, []string{"tag1"})
+
+	// Filter by both tag and dir tag
+	tag := "tag1"
+	dirPath := "/path/to/dir"
+	notes, err := store.ListNotes(&NoteFilter{Tag: &tag, DirTag: &dirPath})
+	if err != nil {
+		t.Fatalf("failed to list notes with both filters: %v", err)
+	}
+
+	if len(notes) != 1 {
+		t.Errorf("expected 1 note matching both filters, got %d", len(notes))
+	}
+}
+
+func TestListNotesWithGlobalAndLimit(t *testing.T) {
+	store := newTestStore(t)
+
+	// Create multiple global notes
+	for i := 0; i < 5; i++ {
+		note := models.NewNote("Global Note", "Content")
+		_ = store.CreateNote(note, []string{"regular"})
+	}
+
+	// Create dir-tagged note
+	dirNote := models.NewNote("Dir Note", "Content")
+	_ = store.CreateNote(dirNote, []string{"dir:/some/path"})
+
+	// Filter global with limit
+	notes, err := store.ListNotes(&NoteFilter{Global: true, Limit: 3})
+	if err != nil {
+		t.Fatalf("failed to list global notes with limit: %v", err)
+	}
+
+	if len(notes) != 3 {
+		t.Errorf("expected 3 global notes (limited), got %d", len(notes))
+	}
+}
+
+func TestCreateNoteWithDuplicateTags(t *testing.T) {
+	store := newTestStore(t)
+
+	note := models.NewNote("Duplicate Tags", "Content")
+	// Include duplicate tags (case-insensitive)
+	tags := []string{"tag1", "TAG1", "tag2", "Tag2", "tag1"}
+	_ = store.CreateNote(note, tags)
+
+	retrievedTags, err := store.GetNoteTags(note.ID)
+	if err != nil {
+		t.Fatalf("failed to get note tags: %v", err)
+	}
+
+	// Should only have 2 unique tags after normalization
+	if len(retrievedTags) != 2 {
+		t.Errorf("expected 2 unique tags, got %d: %v", len(retrievedTags), retrievedTags)
+	}
+}
+
+func TestSearchNotesNoResults(t *testing.T) {
+	store := newTestStore(t)
+
+	// Create notes
+	note := models.NewNote("Test Note", "Some content here")
+	_ = store.CreateNote(note, nil)
+
+	// Search for something that doesn't exist
+	notes, err := store.ListNotes(&NoteFilter{Search: "xyznonexistent"})
+	if err != nil {
+		t.Fatalf("failed to search notes: %v", err)
+	}
+
+	if len(notes) != 0 {
+		t.Errorf("expected 0 notes, got %d", len(notes))
+	}
+}
+
+func TestListNotesEmpty(t *testing.T) {
+	store := newTestStore(t)
+
+	// List from empty database
+	notes, err := store.ListNotes(&NoteFilter{})
+	if err != nil {
+		t.Fatalf("failed to list notes: %v", err)
+	}
+
+	if len(notes) != 0 {
+		t.Errorf("expected 0 notes, got %d", len(notes))
+	}
+}
+
+func TestCountGlobalNotesEmpty(t *testing.T) {
+	store := newTestStore(t)
+
+	// Count from empty database
+	count, err := store.CountGlobalNotes()
+	if err != nil {
+		t.Fatalf("failed to count global notes: %v", err)
+	}
+
+	if count != 0 {
+		t.Errorf("expected 0 global notes, got %d", count)
+	}
+}
+
+func TestUpdateNoteTags(t *testing.T) {
+	store := newTestStore(t)
+
+	note := models.NewNote("Tag Update Test", "Content")
+	_ = store.CreateNote(note, []string{"old1", "old2"})
+
+	// Update with completely new tags
+	note.Touch()
+	err := store.UpdateNote(note, []string{"new1", "new2", "new3"})
+	if err != nil {
+		t.Fatalf("failed to update note: %v", err)
+	}
+
+	tags, err := store.GetNoteTags(note.ID)
+	if err != nil {
+		t.Fatalf("failed to get note tags: %v", err)
+	}
+
+	if len(tags) != 3 {
+		t.Errorf("expected 3 tags after update, got %d", len(tags))
+	}
+
+	// Verify old tags are gone
+	for _, tag := range tags {
+		if tag == "old1" || tag == "old2" {
+			t.Errorf("old tag %q should have been removed", tag)
+		}
+	}
+}

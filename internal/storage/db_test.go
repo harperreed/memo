@@ -6,6 +6,7 @@ package storage
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -78,6 +79,38 @@ func TestDefaultDataPath(t *testing.T) {
 	// Should be under .local/share/memo
 	if !filepath.IsAbs(path) {
 		t.Errorf("expected absolute path, got %s", path)
+	}
+}
+
+func TestDefaultDataPathWithXDGDataHome(t *testing.T) {
+	// Save original value
+	original := os.Getenv("XDG_DATA_HOME")
+	defer os.Setenv("XDG_DATA_HOME", original)
+
+	// Set XDG_DATA_HOME to a custom path
+	customPath := "/custom/data/home"
+	os.Setenv("XDG_DATA_HOME", customPath)
+
+	path := DefaultDataPath()
+
+	// Should use XDG_DATA_HOME
+	if !strings.HasPrefix(path, customPath) {
+		t.Errorf("expected path to start with %s, got %s", customPath, path)
+	}
+
+	// Should still end with memo/memo.db
+	expected := filepath.Join(customPath, "memo", "memo.db")
+	if path != expected {
+		t.Errorf("expected path %s, got %s", expected, path)
+	}
+}
+
+func TestStoreCloseNilDB(t *testing.T) {
+	// Test closing a store with nil db
+	store := &Store{db: nil}
+	err := store.Close()
+	if err != nil {
+		t.Errorf("expected nil error closing store with nil db, got %v", err)
 	}
 }
 

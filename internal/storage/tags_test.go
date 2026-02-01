@@ -179,3 +179,67 @@ func TestRemoveTagFromNoteNonExistent(t *testing.T) {
 		t.Errorf("expected 1 tag unchanged, got %d", len(tags))
 	}
 }
+
+func TestAddEmptyTagToNote(t *testing.T) {
+	store := newTestStore(t)
+
+	note := models.NewNote("Tag Test", "Content")
+	_ = store.CreateNote(note, []string{"existing"})
+
+	// Adding an empty tag should not error and not add anything
+	err := store.AddTagToNote(note.ID, "")
+	if err != nil {
+		t.Errorf("adding empty tag should not error: %v", err)
+	}
+
+	// Adding a whitespace-only tag should not error and not add anything
+	err = store.AddTagToNote(note.ID, "   ")
+	if err != nil {
+		t.Errorf("adding whitespace tag should not error: %v", err)
+	}
+
+	// Tags should be unchanged
+	tags, _ := store.GetNoteTags(note.ID)
+	if len(tags) != 1 {
+		t.Errorf("expected 1 tag unchanged, got %d", len(tags))
+	}
+}
+
+func TestRemoveEmptyTagFromNote(t *testing.T) {
+	store := newTestStore(t)
+
+	note := models.NewNote("Tag Test", "Content")
+	_ = store.CreateNote(note, []string{"existing"})
+
+	// Removing an empty tag should not error
+	err := store.RemoveTagFromNote(note.ID, "")
+	if err != nil {
+		t.Errorf("removing empty tag should not error: %v", err)
+	}
+
+	// Removing a whitespace-only tag should not error
+	err = store.RemoveTagFromNote(note.ID, "   ")
+	if err != nil {
+		t.Errorf("removing whitespace tag should not error: %v", err)
+	}
+
+	// Tags should be unchanged
+	tags, _ := store.GetNoteTags(note.ID)
+	if len(tags) != 1 {
+		t.Errorf("expected 1 tag unchanged, got %d", len(tags))
+	}
+}
+
+func TestListAllTagsEmpty(t *testing.T) {
+	store := newTestStore(t)
+
+	// No notes with tags
+	tags, err := store.ListAllTags()
+	if err != nil {
+		t.Fatalf("failed to list tags: %v", err)
+	}
+
+	if len(tags) != 0 {
+		t.Errorf("expected 0 tags, got %d", len(tags))
+	}
+}
