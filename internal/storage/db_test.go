@@ -87,8 +87,8 @@ func TestDefaultDataPathWithXDGDataHome(t *testing.T) {
 	original := os.Getenv("XDG_DATA_HOME")
 	defer os.Setenv("XDG_DATA_HOME", original)
 
-	// Set XDG_DATA_HOME to a custom path
-	customPath := "/custom/data/home"
+	// Set XDG_DATA_HOME to a custom path using filepath.FromSlash for portability
+	customPath := filepath.FromSlash("/custom/data/home")
 	os.Setenv("XDG_DATA_HOME", customPath)
 
 	path := DefaultDataPath()

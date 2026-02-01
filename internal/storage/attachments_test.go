@@ -274,40 +274,37 @@ func TestAttachmentPrefixAmbiguous(t *testing.T) {
 	note := models.NewNote("Ambiguous Test", "Content")
 	_ = store.CreateNote(note, nil)
 
-	// Create two attachments with IDs that have the same prefix
-	// Since UUIDs are random, we'll create multiple attachments
-	// and check if we can find a common prefix among any two
-	var attachments []*models.Attachment
-	for i := 0; i < 20; i++ {
-		att := models.NewAttachment(note.ID, "file.txt", "text/plain", []byte("content"))
-		_ = store.CreateAttachment(att)
-		attachments = append(attachments, att)
+	// Create two attachments with deterministic UUIDs that share the same 6-char prefix
+	// These UUIDs are crafted to have the same first 6 characters: "aaaaaa"
+	id1, _ := uuid.Parse("aaaaaaaa-0001-0001-0001-000000000001")
+	id2, _ := uuid.Parse("aaaaaaaa-0002-0002-0002-000000000002")
+
+	att1 := &models.Attachment{
+		ID:       id1,
+		NoteID:   note.ID,
+		Filename: "file1.txt",
+		MimeType: "text/plain",
+		Data:     []byte("content1"),
+	}
+	att2 := &models.Attachment{
+		ID:       id2,
+		NoteID:   note.ID,
+		Filename: "file2.txt",
+		MimeType: "text/plain",
+		Data:     []byte("content2"),
 	}
 
-	// Find two attachments with the same 6-char prefix (if any)
-	prefixMap := make(map[string][]*models.Attachment)
-	for _, att := range attachments {
-		prefix := att.ID.String()[:6]
-		prefixMap[prefix] = append(prefixMap[prefix], att)
-	}
+	_ = store.CreateAttachment(att1)
+	_ = store.CreateAttachment(att2)
 
-	// Look for ambiguous prefix
-	for prefix, atts := range prefixMap {
-		if len(atts) > 1 {
-			_, err := store.GetAttachmentByPrefix(prefix)
-			if err == nil {
-				t.Errorf("expected error for ambiguous prefix")
-			}
-			if !errors.Is(err, ErrAmbiguousPrefix) {
-				t.Errorf("expected ErrAmbiguousPrefix, got %v", err)
-			}
-			return // Found and tested ambiguous case
-		}
+	// The shared 6-char prefix should trigger ambiguous error
+	_, err := store.GetAttachmentByPrefix("aaaaaa")
+	if err == nil {
+		t.Error("expected error for ambiguous prefix")
 	}
-
-	// If no collision found naturally, that's OK - UUIDs are designed to be unique
-	// Just verify the error constant exists
-	t.Log("No natural UUID prefix collision found in sample - this is expected behavior")
+	if !errors.Is(err, ErrAmbiguousPrefix) {
+		t.Errorf("expected ErrAmbiguousPrefix, got %v", err)
+	}
 }
 
 func TestEmptyAttachmentData(t *testing.T) {

@@ -23,6 +23,16 @@ var (
 	ErrAmbiguousPrefix = errors.New("prefix matches multiple notes")
 )
 
+// escapeFTS5Query escapes special characters in an FTS5 query string.
+// FTS5 treats certain characters as operators (e.g., -, :, ^, *, (, ), ").
+// We wrap search terms in double quotes to treat them as literal strings.
+func escapeFTS5Query(query string) string {
+	// Escape any existing double quotes by doubling them
+	escaped := strings.ReplaceAll(query, `"`, `""`)
+	// Wrap the entire query in double quotes to treat as a phrase/literal
+	return `"` + escaped + `"`
+}
+
 // NoteFilter defines criteria for filtering notes.
 type NoteFilter struct {
 	Tag    *string // Filter by tag name
@@ -255,7 +265,9 @@ func (s *Store) searchNotes(filter *NoteFilter) ([]*models.Note, error) {
 		WHERE notes_fts MATCH ?
 		ORDER BY n.updated_at DESC
 	`
-	args := []interface{}{filter.Search}
+	// Escape FTS5 special characters to prevent syntax errors
+	escapedSearch := escapeFTS5Query(filter.Search)
+	args := []interface{}{escapedSearch}
 
 	if filter.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", filter.Limit)

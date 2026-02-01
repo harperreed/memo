@@ -577,3 +577,110 @@ func TestUpdateNoteTags(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchNotesWithFTS5SpecialCharacters(t *testing.T) {
+	store := newTestStore(t)
+
+	// Create notes with FTS5 special characters in content
+	testCases := []struct {
+		title   string
+		content string
+		search  string
+		desc    string
+	}{
+		{
+			title:   "Quote Test",
+			content: `He said "hello world" today`,
+			search:  "hello",
+			desc:    "double quotes in content",
+		},
+		{
+			title:   "Dash Test",
+			content: "This is a well-known fact",
+			search:  "well",
+			desc:    "hyphenated words",
+		},
+		{
+			title:   "Asterisk Test",
+			content: "Use * for wildcard matching",
+			search:  "wildcard",
+			desc:    "asterisk in content",
+		},
+		{
+			title:   "Parentheses Test",
+			content: "Call function(arg1, arg2) here",
+			search:  "function",
+			desc:    "parentheses in content",
+		},
+		{
+			title:   "Colon Test",
+			content: "key: value pairs",
+			search:  "key",
+			desc:    "colon in content",
+		},
+		{
+			title:   "Plus Test",
+			content: "C++ is a programming language",
+			search:  "programming",
+			desc:    "plus signs in content",
+		},
+		{
+			title:   "Caret Test",
+			content: "Use ^ for exponentiation",
+			search:  "exponentiation",
+			desc:    "caret in content",
+		},
+	}
+
+	// Create all notes
+	for _, tc := range testCases {
+		note := models.NewNote(tc.title, tc.content)
+		if err := store.CreateNote(note, nil); err != nil {
+			t.Fatalf("failed to create note for %s: %v", tc.desc, err)
+		}
+	}
+
+	// Search for each note and verify we find it
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			notes, err := store.ListNotes(&NoteFilter{Search: tc.search})
+			if err != nil {
+				t.Fatalf("search failed for %s: %v", tc.desc, err)
+			}
+			if len(notes) == 0 {
+				t.Errorf("expected to find note with %s, but found none", tc.desc)
+			}
+			found := false
+			for _, n := range notes {
+				if n.Title == tc.title {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("expected to find %q in search results for %s", tc.title, tc.desc)
+			}
+		})
+	}
+
+	// Test that searching with special characters as input does not cause errors
+	specialSearches := []string{
+		`"quoted phrase"`,
+		`term-with-dashes`,
+		`term*`,
+		`(term)`,
+		`term:value`,
+		`term+other`,
+		`^term`,
+	}
+
+	for _, search := range specialSearches {
+		t.Run("special_search_"+search, func(t *testing.T) {
+			// The main goal is to ensure no errors/panics occur
+			_, err := store.ListNotes(&NoteFilter{Search: search})
+			if err != nil {
+				t.Errorf("search with %q should not error, got: %v", search, err)
+			}
+		})
+	}
+}

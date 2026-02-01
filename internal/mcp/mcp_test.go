@@ -9,12 +9,41 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/harper/memo/internal/storage"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// uuidRegex matches a valid UUID format.
+var uuidRegex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// extractNoteID extracts and validates the note ID from a "Created note <uuid>" message.
+func extractNoteID(t *testing.T, text string) string {
+	t.Helper()
+	noteID := strings.TrimPrefix(text, "Created note ")
+	if !uuidRegex.MatchString(noteID) {
+		t.Fatalf("expected valid UUID format, got %q", noteID)
+	}
+	return noteID
+}
+
+// extractAttachmentID extracts and validates the attachment ID from an "Added attachment <uuid> to note <uuid>" message.
+func extractAttachmentID(t *testing.T, text string) string {
+	t.Helper()
+	// Expected format: "Added attachment <uuid> to note <uuid>"
+	parts := strings.Split(text, " ")
+	if len(parts) < 3 {
+		t.Fatalf("unexpected attachment response format: %q", text)
+	}
+	attachmentID := parts[2]
+	if !uuidRegex.MatchString(attachmentID) {
+		t.Fatalf("expected valid UUID format for attachment ID, got %q", attachmentID)
+	}
+	return attachmentID
+}
 
 // newTestServer creates a new MCP server with a test store.
 func newTestServer(t *testing.T) *Server {
@@ -211,8 +240,8 @@ func TestHandleGetNote(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	// Extract UUID from "Created note <uuid>"
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	// Extract and validate UUID from "Created note <uuid>"
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("get by full ID", func(t *testing.T) {
 		req := makeCallToolRequest(map[string]interface{}{
@@ -269,7 +298,7 @@ func TestHandleUpdateNote(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("update title", func(t *testing.T) {
 		req := makeCallToolRequest(map[string]interface{}{
@@ -343,7 +372,7 @@ func TestHandleDeleteNote(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("delete by full ID", func(t *testing.T) {
 		req := makeCallToolRequest(map[string]interface{}{
@@ -444,7 +473,7 @@ func TestHandleAddTag(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("add tag successfully", func(t *testing.T) {
 		req := makeCallToolRequest(map[string]interface{}{
@@ -489,7 +518,7 @@ func TestHandleRemoveTag(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("remove tag successfully", func(t *testing.T) {
 		req := makeCallToolRequest(map[string]interface{}{
@@ -533,7 +562,7 @@ func TestHandleAddAttachment(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("add attachment successfully", func(t *testing.T) {
 		data := base64.StdEncoding.EncodeToString([]byte("test file content"))
@@ -600,7 +629,7 @@ func TestHandleListAttachments(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	// Add an attachment
 	data := base64.StdEncoding.EncodeToString([]byte("attachment content"))
@@ -657,7 +686,7 @@ func TestHandleGetAttachment(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	// Add an attachment
 	originalData := []byte("get attachment content")
@@ -671,8 +700,7 @@ func TestHandleGetAttachment(t *testing.T) {
 	attachResult, _ := server.handleAddAttachment(ctx, attachReq)
 	attachText := attachResult.Content[0].(*mcp.TextContent)
 	// Extract attachment ID from "Added attachment <uuid> to note <uuid>"
-	parts := strings.Split(attachText.Text, " ")
-	attachmentID := parts[2]
+	attachmentID := extractAttachmentID(t, attachText.Text)
 
 	t.Run("get attachment by ID", func(t *testing.T) {
 		req := makeCallToolRequest(map[string]interface{}{
@@ -720,7 +748,7 @@ func TestHandleExportNote(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("export as JSON (default)", func(t *testing.T) {
 		req := makeCallToolRequest(map[string]interface{}{
@@ -802,7 +830,7 @@ func TestHandleReadResource(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("read resource by ID", func(t *testing.T) {
 		req := &mcp.ReadResourceRequest{
@@ -1106,7 +1134,7 @@ func TestDeleteNoteByPrefix(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 	prefix := noteID[:6]
 
 	t.Run("delete by prefix", func(t *testing.T) {
@@ -1144,7 +1172,7 @@ func TestExportNoteWithAttachment(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	// Add an attachment
 	data := base64.StdEncoding.EncodeToString([]byte("attachment data"))
@@ -1192,7 +1220,7 @@ func TestHandleUpdateNoteByPrefix(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 	prefix := noteID[:6]
 
 	t.Run("update by prefix", func(t *testing.T) {
@@ -1222,7 +1250,7 @@ func TestHandleAddTagByFullID(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("add tag by full ID", func(t *testing.T) {
 		req := makeCallToolRequest(map[string]interface{}{
@@ -1252,7 +1280,7 @@ func TestHandleRemoveTagByFullID(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("remove tag by full ID", func(t *testing.T) {
 		req := makeCallToolRequest(map[string]interface{}{
@@ -1281,7 +1309,7 @@ func TestHandleAddAttachmentByFullID(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("add attachment by full ID", func(t *testing.T) {
 		data := base64.StdEncoding.EncodeToString([]byte("test content"))
@@ -1313,7 +1341,7 @@ func TestHandleListAttachmentsByFullID(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	// Add attachment
 	data := base64.StdEncoding.EncodeToString([]byte("content"))
@@ -1351,7 +1379,7 @@ func TestHandleGetAttachmentByFullID(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	// Add attachment
 	data := base64.StdEncoding.EncodeToString([]byte("content"))
@@ -1363,8 +1391,7 @@ func TestHandleGetAttachmentByFullID(t *testing.T) {
 	})
 	attachResult, _ := server.handleAddAttachment(ctx, attachReq)
 	attachText := attachResult.Content[0].(*mcp.TextContent)
-	parts := strings.Split(attachText.Text, " ")
-	attachmentID := parts[2]
+	attachmentID := extractAttachmentID(t, attachText.Text)
 
 	t.Run("get attachment by full ID", func(t *testing.T) {
 		req := makeCallToolRequest(map[string]interface{}{
@@ -1392,7 +1419,7 @@ func TestHandleExportNoteByFullID(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("export by full ID", func(t *testing.T) {
 		req := makeCallToolRequest(map[string]interface{}{
@@ -1420,7 +1447,7 @@ func TestHandleDeleteNoteByFullID(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("delete by full ID", func(t *testing.T) {
 		req := makeCallToolRequest(map[string]interface{}{
@@ -1448,7 +1475,7 @@ func TestHandleUpdateNoteTitle(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	t.Run("update only title", func(t *testing.T) {
 		req := makeCallToolRequest(map[string]interface{}{
@@ -1517,7 +1544,7 @@ func TestHandleGetAttachmentByPrefix(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 
 	// Add attachment
 	data := base64.StdEncoding.EncodeToString([]byte("content"))
@@ -1529,8 +1556,7 @@ func TestHandleGetAttachmentByPrefix(t *testing.T) {
 	})
 	attachResult, _ := server.handleAddAttachment(ctx, attachReq)
 	attachText := attachResult.Content[0].(*mcp.TextContent)
-	parts := strings.Split(attachText.Text, " ")
-	attachmentID := parts[2]
+	attachmentID := extractAttachmentID(t, attachText.Text)
 	prefix := attachmentID[:6]
 
 	t.Run("get attachment by prefix", func(t *testing.T) {
@@ -1559,7 +1585,7 @@ func TestHandleAddAttachmentByPrefix(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 	prefix := noteID[:6]
 
 	t.Run("add attachment by prefix", func(t *testing.T) {
@@ -1592,7 +1618,7 @@ func TestHandleListAttachmentsByPrefix(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 	prefix := noteID[:6]
 
 	// Add attachment
@@ -1631,7 +1657,7 @@ func TestHandleExportNoteByPrefix(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 	prefix := noteID[:6]
 
 	t.Run("export by prefix", func(t *testing.T) {
@@ -1660,7 +1686,7 @@ func TestHandleAddTagByPrefix(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 	prefix := noteID[:6]
 
 	t.Run("add tag by prefix", func(t *testing.T) {
@@ -1691,7 +1717,7 @@ func TestHandleRemoveTagByPrefix(t *testing.T) {
 	})
 	createResult, _ := server.handleAddNote(ctx, createReq)
 	textContent := createResult.Content[0].(*mcp.TextContent)
-	noteID := strings.TrimPrefix(textContent.Text, "Created note ")
+	noteID := extractNoteID(t, textContent.Text)
 	prefix := noteID[:6]
 
 	t.Run("remove tag by prefix", func(t *testing.T) {

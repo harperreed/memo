@@ -327,6 +327,9 @@ func TestTerminalRendererCodeSpan(t *testing.T) {
 	if !strings.Contains(output, "`") {
 		t.Error("expected output to contain code span marker")
 	}
+	if !strings.Contains(output, "code") {
+		t.Error("expected output to contain the literal code text")
+	}
 }
 
 func TestTerminalRendererLink(t *testing.T) {
