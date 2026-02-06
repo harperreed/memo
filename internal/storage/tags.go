@@ -18,7 +18,7 @@ type TagWithCount struct {
 }
 
 // ListAllTags returns all unique tags with their usage counts.
-func (s *Store) ListAllTags() ([]*TagWithCount, error) {
+func (s *SqliteStore) ListAllTags() ([]*TagWithCount, error) {
 	rows, err := s.db.Query(`
 		SELECT t.name, COUNT(nt.note_id) as count
 		FROM tags t
@@ -48,7 +48,7 @@ func (s *Store) ListAllTags() ([]*TagWithCount, error) {
 }
 
 // AddTagToNote adds a tag to a note.
-func (s *Store) AddTagToNote(noteID uuid.UUID, tagName string) error {
+func (s *SqliteStore) AddTagToNote(noteID uuid.UUID, tagName string) error {
 	normalizedTag := strings.ToLower(strings.TrimSpace(tagName))
 	if normalizedTag == "" {
 		return nil
@@ -85,7 +85,7 @@ func (s *Store) AddTagToNote(noteID uuid.UUID, tagName string) error {
 }
 
 // RemoveTagFromNote removes a tag from a note.
-func (s *Store) RemoveTagFromNote(noteID uuid.UUID, tagName string) error {
+func (s *SqliteStore) RemoveTagFromNote(noteID uuid.UUID, tagName string) error {
 	normalizedTag := strings.ToLower(strings.TrimSpace(tagName))
 	if normalizedTag == "" {
 		return nil

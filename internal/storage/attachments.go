@@ -19,7 +19,7 @@ var (
 )
 
 // CreateAttachment creates a new attachment.
-func (s *Store) CreateAttachment(att *models.Attachment) error {
+func (s *SqliteStore) CreateAttachment(att *models.Attachment) error {
 	_, err := s.db.Exec(`
 		INSERT INTO attachments (id, note_id, filename, mime_type, data, created_at)
 		VALUES (?, ?, ?, ?, ?, ?)
@@ -31,7 +31,7 @@ func (s *Store) CreateAttachment(att *models.Attachment) error {
 }
 
 // GetAttachmentByID retrieves an attachment by its UUID.
-func (s *Store) GetAttachmentByID(id uuid.UUID) (*models.Attachment, error) {
+func (s *SqliteStore) GetAttachmentByID(id uuid.UUID) (*models.Attachment, error) {
 	row := s.db.QueryRow(`
 		SELECT id, note_id, filename, mime_type, data, created_at
 		FROM attachments
@@ -50,7 +50,7 @@ func (s *Store) GetAttachmentByID(id uuid.UUID) (*models.Attachment, error) {
 }
 
 // GetAttachmentByPrefix finds an attachment by ID prefix (minimum 6 chars).
-func (s *Store) GetAttachmentByPrefix(prefix string) (*models.Attachment, error) {
+func (s *SqliteStore) GetAttachmentByPrefix(prefix string) (*models.Attachment, error) {
 	if len(prefix) < 6 {
 		return nil, ErrPrefixTooShort
 	}
@@ -85,7 +85,7 @@ func (s *Store) GetAttachmentByPrefix(prefix string) (*models.Attachment, error)
 }
 
 // ListAttachmentsByNote returns all attachments for a note.
-func (s *Store) ListAttachmentsByNote(noteID uuid.UUID) ([]*models.Attachment, error) {
+func (s *SqliteStore) ListAttachmentsByNote(noteID uuid.UUID) ([]*models.Attachment, error) {
 	rows, err := s.db.Query(`
 		SELECT id, note_id, filename, mime_type, data, created_at
 		FROM attachments
@@ -110,7 +110,7 @@ func (s *Store) ListAttachmentsByNote(noteID uuid.UUID) ([]*models.Attachment, e
 }
 
 // DeleteAttachment deletes an attachment by ID.
-func (s *Store) DeleteAttachment(id uuid.UUID) error {
+func (s *SqliteStore) DeleteAttachment(id uuid.UUID) error {
 	result, err := s.db.Exec(`DELETE FROM attachments WHERE id = ?`, id.String())
 	if err != nil {
 		return fmt.Errorf("delete attachment: %w", err)

@@ -12,10 +12,10 @@ import (
 
 type Server struct {
 	server *mcp.Server
-	store  *storage.Store
+	store  storage.Storage
 }
 
-func NewServer(store *storage.Store) *Server {
+func NewServer(store storage.Storage) *Server {
 	s := &Server{store: store}
 
 	s.server = mcp.NewServer(

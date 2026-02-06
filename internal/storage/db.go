@@ -12,15 +12,18 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Store provides SQLite-based storage for memo notes, tags, and attachments.
-type Store struct {
+// SqliteStore provides SQLite-based storage for memo notes, tags, and attachments.
+type SqliteStore struct {
 	db     *sql.DB
 	dbPath string
 }
 
-// NewStore creates a new Store with the given database path.
+// Compile-time check that SqliteStore implements Storage.
+var _ Storage = (*SqliteStore)(nil)
+
+// NewSqliteStore creates a new SqliteStore with the given database path.
 // It initializes the schema if the database doesn't exist.
-func NewStore(dbPath string) (*Store, error) {
+func NewSqliteStore(dbPath string) (*SqliteStore, error) {
 	// Ensure parent directory exists
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0750); err != nil {
@@ -33,7 +36,7 @@ func NewStore(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
-	store := &Store{
+	store := &SqliteStore{
 		db:     db,
 		dbPath: dbPath,
 	}
@@ -48,7 +51,7 @@ func NewStore(dbPath string) (*Store, error) {
 }
 
 // Close closes the database connection.
-func (s *Store) Close() error {
+func (s *SqliteStore) Close() error {
 	if s.db != nil {
 		return s.db.Close()
 	}
@@ -56,7 +59,7 @@ func (s *Store) Close() error {
 }
 
 // initSchema creates all required tables, indexes, and triggers.
-func (s *Store) initSchema() error {
+func (s *SqliteStore) initSchema() error {
 	schema := `
 	-- Notes table with rowid for FTS5 content_rowid
 	CREATE TABLE IF NOT EXISTS notes (
@@ -150,13 +153,18 @@ func (s *Store) initSchema() error {
 	return tx.Commit()
 }
 
-// DefaultDataPath returns the default path for the memo database.
-// Uses XDG_DATA_HOME or falls back to ~/.local/share/memo/memo.db.
-func DefaultDataPath() string {
+// DataDir returns the default data directory path.
+func DataDir() string {
 	dataHome := os.Getenv("XDG_DATA_HOME")
 	if dataHome == "" {
 		home, _ := os.UserHomeDir()
 		dataHome = filepath.Join(home, ".local", "share")
 	}
-	return filepath.Join(dataHome, "memo", "memo.db")
+	return filepath.Join(dataHome, "memo")
+}
+
+// DefaultDataPath returns the default path for the memo database.
+// Uses XDG_DATA_HOME or falls back to ~/.local/share/memo/memo.db.
+func DefaultDataPath() string {
+	return filepath.Join(DataDir(), "memo.db")
 }

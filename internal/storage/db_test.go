@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestNewStore(t *testing.T) {
+func TestNewSqliteStore(t *testing.T) {
 	// Create temp directory for test database
 	tmpDir, err := os.MkdirTemp("", "memo-test-*")
 	if err != nil {
@@ -20,7 +20,7 @@ func TestNewStore(t *testing.T) {
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	store, err := NewStore(dbPath)
+	store, err := NewSqliteStore(dbPath)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestDefaultDataPathWithXDGDataHome(t *testing.T) {
 
 func TestStoreCloseNilDB(t *testing.T) {
 	// Test closing a store with nil db
-	store := &Store{db: nil}
+	store := &SqliteStore{db: nil}
 	err := store.Close()
 	if err != nil {
 		t.Errorf("expected nil error closing store with nil db, got %v", err)
@@ -115,7 +115,7 @@ func TestStoreCloseNilDB(t *testing.T) {
 }
 
 // newTestStore creates a new in-memory store for testing.
-func newTestStore(t *testing.T) *Store {
+func newTestStore(t *testing.T) *SqliteStore {
 	t.Helper()
 
 	tmpDir, err := os.MkdirTemp("", "memo-test-*")
@@ -129,7 +129,7 @@ func newTestStore(t *testing.T) *Store {
 	})
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	store, err := NewStore(dbPath)
+	store, err := NewSqliteStore(dbPath)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}

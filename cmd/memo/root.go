@@ -1,4 +1,4 @@
-// ABOUTME: Root command for memo CLI with SQLite storage initialization.
+// ABOUTME: Root command for memo CLI with config-driven storage initialization.
 // ABOUTME: Handles global flags and persistent pre/post run hooks.
 
 package main
@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/harper/memo/internal/config"
 	"github.com/harper/memo/internal/storage"
 	"github.com/spf13/cobra"
 )
@@ -15,7 +16,7 @@ memo - Markdown notes
 `
 
 var (
-	store *storage.Store
+	store storage.Storage
 )
 
 var rootCmd = &cobra.Command{
@@ -23,13 +24,17 @@ var rootCmd = &cobra.Command{
 	Short: "A CLI notes tool with markdown support",
 	Long:  banner + `memo is a command-line notes tool that stores markdown notes with tags and attachments.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip storage init for version command
-		if cmd.Name() == "version" {
+		// Skip storage init for version and migrate commands
+		if cmd.Name() == "version" || cmd.Name() == "migrate" {
 			return nil
 		}
 
-		var err error
-		store, err = storage.NewStore(storage.DefaultDataPath())
+		cfg, err := config.Load()
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+
+		store, err = cfg.OpenStorage()
 		if err != nil {
 			return fmt.Errorf("failed to initialize storage: %w", err)
 		}

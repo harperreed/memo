@@ -52,7 +52,7 @@ func newTestServer(t *testing.T) *Server {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	store, err := storage.NewStore(dbPath)
+	store, err := storage.NewSqliteStore(dbPath)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestNewServer(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	store, err := storage.NewStore(dbPath)
+	store, err := storage.NewSqliteStore(dbPath)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -813,7 +813,7 @@ func TestHandleReadResource(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	store, err := storage.NewStore(dbPath)
+	store, err := storage.NewSqliteStore(dbPath)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -906,7 +906,7 @@ func TestPrompts(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	store, err := storage.NewStore(dbPath)
+	store, err := storage.NewSqliteStore(dbPath)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}

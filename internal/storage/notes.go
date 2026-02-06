@@ -43,7 +43,7 @@ type NoteFilter struct {
 }
 
 // CreateNote creates a new note with the given tags.
-func (s *Store) CreateNote(note *models.Note, tags []string) error {
+func (s *SqliteStore) CreateNote(note *models.Note, tags []string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
@@ -68,7 +68,7 @@ func (s *Store) CreateNote(note *models.Note, tags []string) error {
 }
 
 // GetNoteByID retrieves a note by its UUID.
-func (s *Store) GetNoteByID(id uuid.UUID) (*models.Note, []string, error) {
+func (s *SqliteStore) GetNoteByID(id uuid.UUID) (*models.Note, []string, error) {
 	note, err := s.getNoteByIDInternal(id.String())
 	if err != nil {
 		return nil, nil, err
@@ -83,7 +83,7 @@ func (s *Store) GetNoteByID(id uuid.UUID) (*models.Note, []string, error) {
 }
 
 // GetNoteByPrefix finds a note by ID prefix (minimum 6 chars).
-func (s *Store) GetNoteByPrefix(prefix string) (*models.Note, []string, error) {
+func (s *SqliteStore) GetNoteByPrefix(prefix string) (*models.Note, []string, error) {
 	if len(prefix) < 6 {
 		return nil, nil, ErrPrefixTooShort
 	}
@@ -124,7 +124,7 @@ func (s *Store) GetNoteByPrefix(prefix string) (*models.Note, []string, error) {
 }
 
 // UpdateNote updates an existing note's title, content, and tags.
-func (s *Store) UpdateNote(note *models.Note, tags []string) error {
+func (s *SqliteStore) UpdateNote(note *models.Note, tags []string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
@@ -160,7 +160,7 @@ func (s *Store) UpdateNote(note *models.Note, tags []string) error {
 }
 
 // DeleteNote deletes a note and its attachments (via CASCADE).
-func (s *Store) DeleteNote(id uuid.UUID) error {
+func (s *SqliteStore) DeleteNote(id uuid.UUID) error {
 	result, err := s.db.Exec(`DELETE FROM notes WHERE id = ?`, id.String())
 	if err != nil {
 		return fmt.Errorf("delete note: %w", err)
@@ -179,7 +179,7 @@ func (s *Store) DeleteNote(id uuid.UUID) error {
 }
 
 // ListNotes returns notes matching the filter, sorted by updated_at desc.
-func (s *Store) ListNotes(filter *NoteFilter) ([]*models.Note, error) {
+func (s *SqliteStore) ListNotes(filter *NoteFilter) ([]*models.Note, error) {
 	if filter == nil {
 		filter = &NoteFilter{}
 	}
@@ -257,7 +257,7 @@ func (s *Store) ListNotes(filter *NoteFilter) ([]*models.Note, error) {
 }
 
 // searchNotes performs FTS5 search on notes.
-func (s *Store) searchNotes(filter *NoteFilter) ([]*models.Note, error) {
+func (s *SqliteStore) searchNotes(filter *NoteFilter) ([]*models.Note, error) {
 	query := `
 		SELECT n.id, n.title, n.content, n.created_at, n.updated_at
 		FROM notes n
@@ -292,12 +292,12 @@ func (s *Store) searchNotes(filter *NoteFilter) ([]*models.Note, error) {
 }
 
 // GetNoteTags returns the tag names for a note.
-func (s *Store) GetNoteTags(id uuid.UUID) ([]string, error) {
+func (s *SqliteStore) GetNoteTags(id uuid.UUID) ([]string, error) {
 	return s.getNoteTags(id.String())
 }
 
 // CountGlobalNotes returns the count of notes without dir: tags.
-func (s *Store) CountGlobalNotes() (int, error) {
+func (s *SqliteStore) CountGlobalNotes() (int, error) {
 	var count int
 	err := s.db.QueryRow(`
 		SELECT COUNT(*)
@@ -316,7 +316,7 @@ func (s *Store) CountGlobalNotes() (int, error) {
 
 // Internal helpers
 
-func (s *Store) getNoteByIDInternal(id string) (*models.Note, error) {
+func (s *SqliteStore) getNoteByIDInternal(id string) (*models.Note, error) {
 	row := s.db.QueryRow(`
 		SELECT id, title, content, created_at, updated_at
 		FROM notes
@@ -334,7 +334,7 @@ func (s *Store) getNoteByIDInternal(id string) (*models.Note, error) {
 	return note, nil
 }
 
-func (s *Store) getNoteTags(noteID string) ([]string, error) {
+func (s *SqliteStore) getNoteTags(noteID string) ([]string, error) {
 	rows, err := s.db.Query(`
 		SELECT t.name
 		FROM tags t
@@ -359,7 +359,7 @@ func (s *Store) getNoteTags(noteID string) ([]string, error) {
 	return tags, nil
 }
 
-func (s *Store) setNoteTags(tx *sql.Tx, noteID string, tags []string) error {
+func (s *SqliteStore) setNoteTags(tx *sql.Tx, noteID string, tags []string) error {
 	// Remove existing tags for this note
 	_, err := tx.Exec(`DELETE FROM note_tags WHERE note_id = ?`, noteID)
 	if err != nil {
