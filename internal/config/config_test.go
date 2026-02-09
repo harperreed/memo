@@ -63,33 +63,31 @@ func TestExpandPath(t *testing.T) {
 }
 
 func TestLoadSave(t *testing.T) {
-	// Use a temp dir as XDG_CONFIG_HOME
+	// Use a temp dir as XDG_CONFIG_HOME and XDG_DATA_HOME
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
 
-	// Load should return default config when file doesn't exist
+	// Load should return markdown backend for new users (no existing SQLite DB)
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load (missing file) failed: %v", err)
 	}
-	if cfg.Backend != "" {
-		t.Errorf("expected empty backend, got %q", cfg.Backend)
-	}
-	if cfg.DataDir != "" {
-		t.Errorf("expected empty data_dir, got %q", cfg.DataDir)
+	if cfg.Backend != "markdown" {
+		t.Errorf("expected backend 'markdown' for new user, got %q", cfg.Backend)
 	}
 
-	// Save config
+	// Verify config file was auto-created
+	configPath := filepath.Join(tmpDir, "memo", "config.json")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Fatal("config file was not auto-created on first load")
+	}
+
+	// Save config with custom values
 	cfg.Backend = "markdown"
 	cfg.DataDir = "~/memo-data"
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("Save failed: %v", err)
-	}
-
-	// Verify file was created
-	configPath := filepath.Join(tmpDir, "memo", "config.json")
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		t.Fatal("config file was not created")
 	}
 
 	// Load back
@@ -102,6 +100,58 @@ func TestLoadSave(t *testing.T) {
 	}
 	if cfg2.DataDir != "~/memo-data" {
 		t.Errorf("expected data_dir '~/memo-data', got %q", cfg2.DataDir)
+	}
+}
+
+func TestLoadExistingSQLiteUser(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+
+	// Create a fake memo.db to simulate an existing SQLite user
+	dataDir := filepath.Join(tmpDir, "memo")
+	if err := os.MkdirAll(dataDir, 0750); err != nil {
+		t.Fatalf("failed to create data dir: %v", err)
+	}
+	dbPath := filepath.Join(dataDir, "memo.db")
+	if err := os.WriteFile(dbPath, []byte("fake-db"), 0600); err != nil {
+		t.Fatalf("failed to create fake memo.db: %v", err)
+	}
+
+	// Load should detect existing SQLite DB and return sqlite backend
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.Backend != "sqlite" {
+		t.Errorf("expected backend 'sqlite' for existing user, got %q", cfg.Backend)
+	}
+}
+
+func TestLoadAutoCreatedConfigValidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_DATA_HOME", tmpDir)
+
+	// Load to trigger auto-creation
+	_, err := Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	// Read the auto-created config and verify it's valid JSON with backend: "markdown"
+	configPath := filepath.Join(tmpDir, "memo", "config.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read auto-created config: %v", err)
+	}
+
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("auto-created config is not valid JSON: %v", err)
+	}
+	if cfg.Backend != "markdown" {
+		t.Errorf("expected auto-created config backend 'markdown', got %q", cfg.Backend)
 	}
 }
 
