@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/harperreed/mdstore"
 
-	"github.com/harper/memo/internal/models"
+	"github.com/harperreed/memo/internal/models"
 )
 
 // CreateAttachment stores a new attachment on disk.

@@ -1,4 +1,4 @@
-module github.com/harper/memo
+module github.com/harperreed/memo
 
 go 1.24.11
 

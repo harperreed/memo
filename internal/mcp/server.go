@@ -6,7 +6,7 @@ package mcp
 import (
 	"context"
 
-	"github.com/harper/memo/internal/storage"
+	"github.com/harperreed/memo/internal/storage"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

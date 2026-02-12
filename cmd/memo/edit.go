@@ -6,7 +6,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/harper/memo/internal/ui"
+	"github.com/harperreed/memo/internal/ui"
 	"github.com/spf13/cobra"
 )
 

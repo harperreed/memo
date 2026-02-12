@@ -6,8 +6,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/harper/memo/internal/config"
-	"github.com/harper/memo/internal/storage"
+	"github.com/harperreed/memo/internal/config"
+	"github.com/harperreed/memo/internal/storage"
 	"github.com/spf13/cobra"
 )
 

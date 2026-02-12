@@ -14,7 +14,7 @@ import (
 	"github.com/harperreed/mdstore"
 	"gopkg.in/yaml.v3"
 
-	"github.com/harper/memo/internal/models"
+	"github.com/harperreed/memo/internal/models"
 )
 
 // MarkdownStore provides file-based storage for memo notes, tags, and attachments.

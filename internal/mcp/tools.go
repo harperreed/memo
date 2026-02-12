@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/harper/memo/internal/models"
-	"github.com/harper/memo/internal/storage"
+	"github.com/harperreed/memo/internal/models"
+	"github.com/harperreed/memo/internal/storage"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

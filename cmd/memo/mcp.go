@@ -4,7 +4,7 @@
 package main
 
 import (
-	"github.com/harper/memo/internal/mcp"
+	"github.com/harperreed/memo/internal/mcp"
 	"github.com/spf13/cobra"
 )
 

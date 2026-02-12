@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/harper/memo/internal/models"
-	"github.com/harper/memo/internal/ui"
+	"github.com/harperreed/memo/internal/models"
+	"github.com/harperreed/memo/internal/ui"
 	"github.com/spf13/cobra"
 )
 

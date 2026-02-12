@@ -5,7 +5,7 @@ package storage
 
 import (
 	"github.com/google/uuid"
-	"github.com/harper/memo/internal/models"
+	"github.com/harperreed/memo/internal/models"
 )
 
 // Storage defines the interface for memo data persistence.

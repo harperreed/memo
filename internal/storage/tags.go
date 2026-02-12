@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/harper/memo/internal/models"
+	"github.com/harperreed/memo/internal/models"
 )
 
 // TagWithCount represents a tag with its usage count.

@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/harper/memo/internal/storage"
 	"github.com/harperreed/mdstore"
+	"github.com/harperreed/memo/internal/storage"
 )
 
 // Config stores memo configuration.

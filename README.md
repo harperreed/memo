@@ -1,6 +1,6 @@
 # memo
 
-A command-line notes tool that stores markdown notes with tags and attachments in SQLite.
+A command-line notes tool that stores markdown notes with tags and attachments. Supports SQLite and markdown file backends.
 
 ## Features
 
@@ -8,7 +8,7 @@ A command-line notes tool that stores markdown notes with tags and attachments i
 - **Tags**: Organize notes with multiple tags
 - **Attachments**: Attach files to notes (stored as blobs in SQLite)
 - **Full-text search**: FTS5-powered search across titles and content
-- **Beautiful output**: Glamour-rendered markdown in the terminal
+- **Beautiful output**: Rendered markdown in the terminal
 - **MCP Server**: Built-in Model Context Protocol server for AI assistant integration
 - **Portable**: Single SQLite database file, XDG-compliant storage
 
@@ -99,14 +99,21 @@ memo tag rm abc123 important
 memo tag list
 ```
 
+### Directory-aware notes
+
+```bash
+# Tag a note with the current directory
+memo add "Project TODO" --content "..." --here
+
+# List notes tagged with the current directory
+memo list --here
+```
+
 ### Attachments
 
 ```bash
 # Attach a file
 memo attach abc123 document.pdf
-
-# List attachments
-memo attach abc123 --list
 
 # Extract attachment
 memo attach get def456 --output ./downloads/
@@ -168,9 +175,21 @@ Add to your Claude desktop config (`~/.config/claude/claude_desktop_config.json`
 
 ## Storage
 
-Notes are stored in a SQLite database at:
-- **macOS/Linux**: `~/.local/share/memo/memo.db`
-- **Custom**: Use `--db /path/to/memo.db`
+memo supports two storage backends:
+
+- **Markdown** (default for new users): Notes stored as markdown files in `~/.local/share/memo/`
+- **SQLite**: Notes stored in `~/.local/share/memo/memo.db`
+
+Configure the backend in `~/.config/memo/config.json`:
+
+```json
+{
+  "backend": "markdown",
+  "data_dir": "~/.local/share/memo"
+}
+```
+
+Use `memo migrate --to markdown` or `memo migrate --to sqlite` to switch backends.
 
 ## Building
 

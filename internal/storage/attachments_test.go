@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/harper/memo/internal/models"
+	"github.com/harperreed/memo/internal/models"
 )
 
 func TestCreateAttachment(t *testing.T) {

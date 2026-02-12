@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/harper/memo/internal/models"
+	"github.com/harperreed/memo/internal/models"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

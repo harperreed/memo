@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/harper/memo/internal/models"
-	"github.com/harper/memo/internal/storage"
-	"github.com/harper/memo/internal/ui"
+	"github.com/harperreed/memo/internal/models"
+	"github.com/harperreed/memo/internal/storage"
+	"github.com/harperreed/memo/internal/ui"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )

@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/harperreed/mdstore"
 
-	"github.com/harper/memo/internal/models"
+	"github.com/harperreed/memo/internal/models"
 )
 
 // CreateNote creates a new note with the given tags.

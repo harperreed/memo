@@ -6,7 +6,7 @@ package storage
 import (
 	"testing"
 
-	"github.com/harper/memo/internal/models"
+	"github.com/harperreed/memo/internal/models"
 )
 
 func TestListAllTags(t *testing.T) {
